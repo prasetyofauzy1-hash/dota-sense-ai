@@ -164,7 +164,7 @@ def recommend_items(state: GameState, threats: list[Threat], *, popularity: dict
                 if item not in scored_items:
                     scored_items.add(item)
                     item_cost = C.item_cost(item) or 0
-                    phase_scale = 0.35 if (phase_key == "laning" and item_cost >= LANING_EXPENSIVE_THRESHOLD) else 1.0
+                    phase_scale = 0.25 if (phase_key == "laning" and item_cost >= LANING_EXPENSIVE_THRESHOLD) else 1.0
                     if phase_key == "laning" and item == "gem":
                         phase_scale = 0.35
                     add(item, 0.35 * threat.severity * phase_scale, "", why)

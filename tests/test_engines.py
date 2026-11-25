@@ -127,6 +127,19 @@ def test_disable_counters_match_how_the_spell_works():
     assert "does not block" in counters["lotus_orb"].explanation and "Basic dispel" in counters["lotus_orb"].explanation
 
 
+@pytest.mark.parametrize("hero", [
+    "magnataur", "death_prophet", "huskar", "medusa", "monkey_king", "riki", "slark", "zuus",
+])
+def test_curated_non_piercing_area_control_suggests_bkb(hero):
+    threats = counter_analyzer.analyze_threats([hero])
+    assert "area_disable" in threats[0].tags
+    counter = next(c for c in counter_analyzer.counter_items(threats) if c.item == "black_king_bar")
+    assert C.THREAT_LABELS["area_disable"] in counter.counters
+    if hero == "magnataur":
+        assert "area_piercing_disable" in threats[0].tags
+        assert "does not prevent piercing lockdown" in counter.explanation
+
+
 @pytest.mark.parametrize(("hero", "targeted"), [
     ("alchemist", True),
     ("antimage", True),
