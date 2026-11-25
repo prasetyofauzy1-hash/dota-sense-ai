@@ -91,6 +91,13 @@ def run_ui(page, proc, dota: Path, token: str, payload: dict, out: Path) -> None
     assert json.loads(urllib.request.urlopen(req, timeout=5).read())["ok"] is True
     page.get_by_text("Receiving").first.wait_for(timeout=30_000)
     page.get_by_text("Juggernaut").first.wait_for(timeout=30_000)
+    page.get_by_text("Enemy lineup not available").first.wait_for(timeout=30_000)
+    picker = page.locator("[data-testid=stMultiSelect] input").first
+    picker.click()
+    picker.fill("Phantom Assassin")
+    picker.press("Enter")
+    page.keyboard.press("Escape")
+    page.locator(".ds-glance").get_by_text("Phantom Assassin").first.wait_for(timeout=30_000)
     time.sleep(2)
     page.screenshot(path=str(out / "2-live-gsi.png"), full_page=True)
     assert "MOCK DATA" not in page.content()
