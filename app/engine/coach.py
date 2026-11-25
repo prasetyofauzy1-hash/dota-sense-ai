@@ -55,8 +55,11 @@ def parse_account_id(raw: int | str | None) -> int | None:
     return val
 
 
+STANDALONE_ITEMS = {"blink", "ghost", "gem"}
+
+
 def _is_completed_item(key: str | None) -> bool:
-    """True for purchasable completed/standalone items (excludes raw secret-shop components & recipes)."""
+    """True for purchasable completed/standalone items (excludes raw components & recipes)."""
     if not key or key.startswith("recipe_"):
         return False
     item = C.items().get(key)
@@ -64,9 +67,9 @@ def _is_completed_item(key: str | None) -> bool:
         return False
     if (item.get("cost") or 0) <= 0:
         return False
-    if item.get("qual") == "secret_shop" and not item.get("components"):
-        return False
-    return True
+    if item.get("components"):
+        return True
+    return key in STANDALONE_ITEMS or item.get("qual") == "rare"
 
 
 def _game_mode_label(match: dict) -> tuple[str, bool]:

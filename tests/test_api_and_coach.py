@@ -92,7 +92,11 @@ def test_coach_role_aware_support_vs_core():
             {
                 "player_slot": 4, "hero_id": 119, "net_worth": 6200, "gold_per_min": 198, "xp_per_min": 380,
                 "kills": 2, "deaths": 11, "assists": 12, "last_hits": 30, "obs_placed": 1, "sen_placed": 4,
-                "purchase_log": [{"time": 18 * 60, "key": "arcane_boots"}, {"time": 26 * 60, "key": "glimmer_cape"}],
+                "purchase_log": [
+                    {"time": 18 * 60, "key": "arcane_boots"},
+                    {"time": 22 * 60, "key": "mithril_hammer"},
+                    {"time": 26 * 60, "key": "glimmer_cape"},
+                ],
                 "benchmarks": {"gold_per_min": {"raw": 198, "pct": 0.05}, "last_hits_per_min": {"raw": 0.8, "pct": 0.1}},
             },
         ],
