@@ -1,6 +1,7 @@
 """Streamlit dashboard: `streamlit run app/dashboard.py`."""
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from app.data.opendota import OpenDotaClient, OpenDotaError, snapshot_meta  # no
 from app.database import models as db  # noqa: E402
 from app.database.connection import connect  # noqa: E402
 from app.engine.coach import coach_match  # noqa: E402
+from app.gsi import dota_cfg  # noqa: E402
 from app.gsi.provider import LiveGSIProvider, MockProvider  # noqa: E402
 from app.services import analyze  # noqa: E402
 
@@ -46,6 +48,7 @@ def resources():
 conn, client = resources()
 mock = MockProvider()
 MISSING = "<span class='ds-missing'>not available</span>"
+LIVE_SOURCE, MOCK_SOURCE = "Live (Dota 2)", "Mock scenario"
 
 
 def val(v, suffix: str = "") -> str:
@@ -64,14 +67,23 @@ def fmt_time(seconds: int | None) -> str:
 with st.sidebar:
     st.title("🛡️ DotaSense AI")
     st.caption("Read-only Dota 2 companion · no automation · no game modification")
-    live = LiveGSIProvider().status()
+    live_provider = LiveGSIProvider()
+    live = live_provider.status()
     st.markdown("**Connection status**")
-    st.markdown("<span class='ds-badge ds-b-ok'>● Mock data</span> active", unsafe_allow_html=True)
-    st.markdown(f"<span class='ds-badge ds-b-off'>○ Live GSI</span> {live['detail']}", unsafe_allow_html=True)
-    st.divider()
-    names = mock.scenario_names()
-    scenario = st.selectbox("Mock scenario", names, format_func=lambda n: mock.load(n)["dotasense_mock"]["scenario_name"])
-    state = MockProvider(scenario=scenario).current_state()
+    live_badge = "<span class='ds-badge ds-b-ok'>● Live GSI</span>" if live["connected"] else \
+        "<span class='ds-badge ds-b-off'>○ Live GSI</span>"
+    st.markdown(f"{live_badge} {live['detail']}", unsafe_allow_html=True)
+    sources = ([LIVE_SOURCE] if settings.live_integration_enabled else []) + [MOCK_SOURCE]
+    source = st.radio("Data source", sources, horizontal=True)
+    live_mode = source == LIVE_SOURCE
+    if live_mode:
+        state = live_provider.current_state()
+        auto_refresh = st.toggle("Auto-refresh on new game data", value=True)
+    else:
+        st.markdown("<span class='ds-badge ds-b-sit'>● Mock data</span> active", unsafe_allow_html=True)
+        names = mock.scenario_names()
+        scenario = st.selectbox("Mock scenario", names, format_func=lambda n: mock.load(n)["dotasense_mock"]["scenario_name"])
+        state = MockProvider(scenario=scenario).current_state()
     hero_options = sorted(C.heroes_by_name(), key=lambda h: C.hero_display(h))
     enemies = st.multiselect("Visible enemy lineup (edit as on the scoreboard)", hero_options,
                              default=[e for e in state.enemy_heroes if e in hero_options],
@@ -84,6 +96,43 @@ with st.sidebar:
     st.divider()
     meta = snapshot_meta()
     st.caption(f"Hero/item constants: OpenDota snapshot {meta['fetched_at'][:10]}")
+    if os.getenv("DOTASENSE_DESKTOP") == "1" and st.button("Quit DotaSense AI"):
+        from app import desktop
+
+        desktop.request_quit()
+
+
+def render_gsi_setup(connected: bool) -> None:
+    with st.expander("Connect Dota 2 (Game State Integration)", expanded=not connected):
+        dota_dir = dota_cfg.find_dota_dir()
+        st.markdown("1. Write the DotaSense config file into Dota 2:")
+        if dota_dir is None:
+            st.warning("Dota 2 install not found. Save the file below into "
+                       "`...\\steamapps\\common\\dota 2 beta\\game\\dota\\cfg\\gamestate_integration\\`.")
+        elif dota_cfg.is_installed(dota_dir):
+            st.success(f"Config installed: `{dota_cfg.cfg_path(dota_dir)}`")
+        elif st.button("Install config into Dota 2"):
+            try:
+                st.success(f"Config written to `{dota_cfg.install(dota_dir)}`")
+            except OSError as exc:
+                st.error(f"Could not write the config: {exc}")
+        st.download_button("Download config file", dota_cfg.cfg_text(), file_name=dota_cfg.CFG_NAME)
+        st.markdown(f"2. In Steam: right-click **Dota 2 → Properties → Launch options**, add "
+                    f"`{dota_cfg.LAUNCH_OPTION}`.\n"
+                    "3. Restart Dota 2 and start a match (or Demo Hero). This panel turns green when data arrives.")
+        st.caption(f"DotaSense listens on {settings.gsi_url} (this PC only). It reads only what Dota 2 "
+                   "sends about your own hero; enemy heroes still come from the sidebar.")
+
+
+if live_mode and auto_refresh and hasattr(st, "fragment"):
+    seen = live_provider.received_at()
+
+    @st.fragment(run_every=2)
+    def _watch_live() -> None:
+        if live_provider.received_at() != seen:
+            st.rerun()
+
+    _watch_live()
 
 result = analyze(state, conn, client, use_history=use_history)
 
@@ -96,6 +145,8 @@ for note in result["notes"]:
 tab_live, tab_post = st.tabs(["Live Match", "Post-Match Reports"])
 
 with tab_live:
+    if live_mode:
+        render_gsi_setup(live["connected"])
     # 1. Live Match Overview
     st.subheader("1 · Live Match Overview")
     c = st.columns(6)

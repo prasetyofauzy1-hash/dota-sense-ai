@@ -4,3 +4,7 @@ __pycache__/
 *.db
 .pytest_cache/
 .env
+.dotasense_gsi_token
+live_gsi_latest.json
+build/
+dist/

@@ -1,0 +1,85 @@
+name: Windows app
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-app-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller playwright
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Build DotaSenseAI.exe
+        run: pyinstaller packaging/windows/dotasense.spec --noconfirm --clean
+
+      - name: Smoke test the built app
+        run: python packaging/windows/smoke_test.py dist\DotaSenseAI\DotaSenseAI.exe smoke\built
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $base = python -c "import app; print(app.__version__)"
+          $version = "$base.${{ github.run_number }}"
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+          $iscc = Get-Command iscc -ErrorAction SilentlyContinue
+          if (-not $iscc) {
+            if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+            $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          }
+          & $iscc "/DAppVersion=$version" packaging\windows\dotasense.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Install, smoke test and uninstall
+        shell: pwsh
+        run: |
+          $p = Start-Process dist\installer\DotaSenseAI-Setup.exe -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Installer exit code $($p.ExitCode)" }
+          $dir = Join-Path $env:LOCALAPPDATA "Programs\DotaSense AI"
+          if (-not (Test-Path "$dir\DotaSenseAI.exe")) { throw "DotaSenseAI.exe not installed in $dir" }
+          python packaging/windows/smoke_test.py "$dir\DotaSenseAI.exe" smoke\installed
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $u = Start-Process "$dir\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait -PassThru
+          Start-Sleep -Seconds 5
+          if (Test-Path "$dir\DotaSenseAI.exe") { throw "Uninstall left DotaSenseAI.exe behind" }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: DotaSenseAI-Windows
+          path: |
+            dist/installer/DotaSenseAI-Setup.exe
+            smoke/
+
+      - name: Publish release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          gh release create "v$env:VERSION" dist/installer/DotaSenseAI-Setup.exe `
+            --target $env:GITHUB_SHA --latest --title "DotaSense AI $env:VERSION (Windows)" `
+            --notes "Download DotaSenseAI-Setup.exe, run it, then open DotaSense AI from the Start menu. See the README section 'Windows app'."

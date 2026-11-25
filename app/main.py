@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI, Header, HTTPException, Query
 
-from app.config import settings
+from app.config import gsi_token, settings
 from app.data.opendota import OpenDotaClient, OpenDotaError
 from app.database import models as db
 from app.database.connection import connect
@@ -12,7 +12,7 @@ from app.gsi.provider import MockProvider
 from app.services import analyze
 
 app = FastAPI(title="DotaSense AI", version="0.1.0",
-              description="Read-only Dota 2 companion. Mock data unless live GSI is enabled.")
+              description="Read-only Dota 2 companion: live Dota 2 GSI or MOCK practice scenarios.")
 app.include_router(receiver.router)
 conn = connect()
 client = OpenDotaClient(conn)
@@ -24,12 +24,10 @@ def _provider():
 
 
 def _require_live_token(x_dotasense_token: str | None = Header(None)) -> None:
-    """Live match state is private: when live GSI is on, reading it needs DOTASENSE_GSI_TOKEN."""
+    """Live match state is private: reading it needs the GSI token (see app/config.gsi_token)."""
     if not settings.live_integration_enabled:
         return
-    if not settings.gsi_auth_token:
-        raise HTTPException(503, "Set DOTASENSE_GSI_TOKEN to read live match state")
-    if x_dotasense_token != settings.gsi_auth_token:
+    if x_dotasense_token != gsi_token():
         raise HTTPException(401, "Invalid or missing X-DotaSense-Token header")
 
 
@@ -41,7 +39,7 @@ def _mock_for(scenario: str) -> MockProvider:
 
 @app.get("/health")
 def health() -> dict:
-    return {"ok": True, "live_integration_enabled": settings.live_integration_enabled,
+    return {"ok": True, "app": "dotasense", "live_integration_enabled": settings.live_integration_enabled,
             "provider": _provider().status()}
 
 
