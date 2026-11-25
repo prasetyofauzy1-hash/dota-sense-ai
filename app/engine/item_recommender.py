@@ -144,7 +144,8 @@ def recommend_items(state: GameState, threats: list[Threat], *, popularity: dict
         if weight == 0.0:
             return
         resolved_benefit = C.ITEM_BENEFITS.get(item) or benefit
-        c = candidates.setdefault(item, {"score": 0.0, "reasons": [], "counters": {}, "benefit": resolved_benefit})
+        c = candidates.setdefault(item, {"score": 0.0, "reasons": [], "counters": {}, "benefit": resolved_benefit,
+                                         "details": []})
         c["score"] += score * weight
         c["reasons"].append(reason)
 
@@ -170,6 +171,9 @@ def recommend_items(state: GameState, threats: list[Threat], *, popularity: dict
                     add(item, 0.35 * threat.severity * phase_scale, "", why)
                 if item in candidates:
                     candidates[item]["counters"].setdefault(tag, []).append(threat.hero_name)
+                    detail = C.counter_detail(item, threat.hero, tag)
+                    if detail:
+                        candidates[item]["details"].append(detail)
 
     recs: list[ItemRecommendation] = []
     for item, c in candidates.items():
@@ -196,7 +200,7 @@ def recommend_items(state: GameState, threats: list[Threat], *, popularity: dict
             upgrade_cost=needed if owned_comps else None,
             owned_components=owned_comps,
             priority=priority,
-            reason="; ".join(reasons), benefit=c["benefit"],
+            reason="; ".join(reasons), benefit=" ".join(dict.fromkeys([c["benefit"], *c["details"]])),
             alternative=alt, alternative_name=C.item_display(alt) if alt else None,
             remaining_gold=(state.gold - needed) if (state.gold is not None and needed is not None) else None,
             affordable=(state.gold >= needed) if (state.gold is not None and needed is not None) else None,

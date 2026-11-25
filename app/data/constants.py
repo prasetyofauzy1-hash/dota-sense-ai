@@ -49,6 +49,15 @@ def hero_display(name: str | None) -> str:
     return hero["localized_name"] if hero else short.replace("_", " ").title()
 
 
+def hero_ability_keys(hero: str) -> list[str]:
+    abilities = _load_snapshot("hero_abilities").get(f"{HERO_PREFIX}{hero_short(hero)}", {}).get("abilities", [])
+    return [key for key in abilities if key and key != "generic_hidden"]
+
+
+def ability_display(hero: str, key: str) -> str:
+    return ABILITY_DISPLAY_NAMES.get(key) or key.removeprefix(f"{hero_short(hero)}_").replace("_", " ").title()
+
+
 def item_display(key: str | None) -> str:
     if not key:
         return "—"
@@ -166,6 +175,102 @@ ROLE_THREATS = {
     "Escape": "role_escape",
     "Pusher": "role_push",
 }
+
+THREAT_ABILITY_SUFFIXES = {
+    "lion": ("impale", "voodoo", "finger_of_death"),
+    "lina": ("light_strike_array", "laguna_blade"),
+    "zuus": ("lightning_bolt", "thundergods_wrath"),
+    "skywrath_mage": ("ancient_seal", "mystic_flare"),
+    "leshrac": ("split_earth", "pulse_nova", "diabolic_edict"),
+    "tinker": ("laser", "warp_grenade"),
+    "storm_spirit": ("electric_vortex", "ball_lightning", "static_remnant"),
+    "queenofpain": ("scream_of_pain", "blink"),
+    "puck": ("dream_coil", "waning_rift", "illusory_orb"),
+    "silencer": ("global_silence", "last_word"),
+    "death_prophet": ("silence", "spirit_siphon", "exorcism"),
+    "doom_bringer": ("doom",),
+    "bane": ("fiends_grip", "nightmare"),
+    "shadow_shaman": ("shackles", "voodoo", "mass_serpent_ward"),
+    "faceless_void": ("chronosphere", "time_lock", "time_walk"),
+    "enigma": ("black_hole", "malefice", "demonic_conversion"),
+    "magnataur": ("reverse_polarity", "skewer"),
+    "tidehunter": ("ravage",),
+    "earthshaker": ("fissure", "echo_slam", "aftershock"),
+    "phantom_assassin": ("immaterial", "coup_de_grace"),
+    "troll_warlord": ("whirling_axes_melee", "fervor", "battle_trance"),
+    "juggernaut": ("omni_slash", "healing_ward"),
+    "sven": ("storm_bolt", "gods_strength"),
+    "ursa": ("fury_swipes", "overpower"),
+    "slark": ("pounce", "shadow_dance"),
+    "monkey_king": ("boundless_strike", "jingu_mastery", "tree_dance"),
+    "riki": ("backstab", "innate_backstab", "smoke_screen"),
+    "bounty_hunter": ("wind_walk",),
+    "clinkz": ("wind_walk",),
+    "nyx_assassin": ("impale", "vendetta", "jolt"),
+    "templar_assassin": ("meld", "refraction"),
+    "weaver": ("shukuchi",),
+    "mirana": ("arrow", "invis"),
+    "phantom_lancer": ("juxtapose", "doppelwalk"),
+    "naga_siren": ("song_of_the_siren", "ensnare", "mirror_image"),
+    "terrorblade": ("conjure_image",),
+    "chaos_knight": ("chaos_bolt", "phantasm", "chaos_strike"),
+    "meepo": ("divided_we_stand", "earthbind", "poof"),
+    "broodmother": ("spawn_spiderlings", "insatiable_hunger"),
+    "furion": ("force_of_nature",),
+    "lycan": ("summon_wolves",),
+    "necrolyte": ("reapers_scythe", "ghost_shroud", "death_pulse"),
+    "huskar": ("berserkers_blood", "burning_spear"),
+    "alchemist": ("unstable_concoction_throw", "chemical_rage"),
+    "morphling": ("adaptive_strike_agi", "waveform"),
+    "dazzle": ("shadow_wave",),
+    "omniknight": ("purification",),
+    "oracle": ("fortunes_end", "purifying_flames"),
+    "witch_doctor": ("paralyzing_cask", "voodoo_restoration", "maledict"),
+    "bristleback": ("bristleback",),
+    "spectre": ("dispersion",),
+    "pudge": ("dismember", "meat_hook"),
+    "axe": ("berserkers_call", "counter_helix"),
+    "legion_commander": ("duel",),
+    "slardar": ("slithereen_crush", "amplify_damage"),
+    "dragon_knight": ("dragon_tail", "elder_dragon_form"),
+    "antimage": ("mana_void", "blink", "mana_break"),
+    "medusa": ("gorgon_grasp", "mana_shield", "split_shot"),
+    "tiny": ("avalanche", "grow"),
+    "invoker": ("tornado", "cold_snap", "chaos_meteor"),
+    "viper": ("corrosive_skin",),
+    "shredder": ("reactive_armor",),
+    "pugna": ("decrepify", "nether_blast"),
+    "chen": ("holy_persuasion", "hand_of_god"),
+    "abaddon": ("death_coil", "borrowed_time"),
+}
+
+ABILITY_DISPLAY_NAMES = {
+    "axe_berserkers_call": "Berserker's Call",
+    "bane_fiends_grip": "Fiend's Grip",
+    "lion_impale": "Earth Spike",
+    "lion_voodoo": "Hex",
+    "medusa_gorgon_grasp": "Gorgon's Grasp",
+    "necrolyte_reapers_scythe": "Reaper's Scythe",
+    "oracle_fortunes_end": "Fortune's End",
+    "riki_backstab": "Cloak and Dagger",
+    "riki_innate_backstab": "Backstab",
+    "shadow_shaman_voodoo": "Hex",
+    "sven_storm_bolt": "Storm Hammer",
+    "zuus_thundergods_wrath": "Thundergod's Wrath",
+}
+
+
+def counter_detail(item: str, hero: str, tag: str) -> str:
+    if (item, hero, tag) != ("black_king_bar", "medusa", "area_disable"):
+        return ""
+    abilities = hero_ability_keys(hero)
+    grasp = "medusa_gorgon_grasp"
+    if grasp not in abilities:
+        return "Against Medusa, BKB helps against non-piercing control, not piercing lockdown."
+    gaze = "medusa_stone_gaze"
+    exception = ability_display(hero, gaze) if gaze in abilities else "piercing lockdown"
+    return f"Against Medusa, BKB helps against {ability_display(hero, grasp)}, not {exception}."
+
 
 # Cover distinct mechanics before showing more options for the same threat.
 COUNTER_FOCUS = (
