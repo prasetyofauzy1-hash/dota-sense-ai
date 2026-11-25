@@ -168,7 +168,7 @@ def render_glance(state: GameState, hero_name: str, phase: str, live_status: str
                      f"<strong class='ds-item-name'>{escape(top.item_name)}</strong>"
                      f"<span class='ds-secondary'>{item_price(top)}</span><br><strong>{item_budget(top)}</strong>")
     if not state.enemy_heroes:
-        next_item += "<br><span class='ds-secondary'>Core build only · Add enemies in the sidebar for counter items.</span>"
+        next_item += "<br><span class='ds-secondary'>Core build only · Pick enemy heroes above for counter items.</span>"
     if threats:
         rows = []
         for threat in threats[:2]:
@@ -178,7 +178,7 @@ def render_glance(state: GameState, hero_name: str, phase: str, live_status: str
         top_threats = f"<ul>{''.join(rows)}</ul>"
     else:
         top_threats = ("<strong>Enemy lineup not available</strong><br>"
-                       "<span class='ds-secondary'>Add visible enemies in the sidebar to see threats.</span>")
+                       "<span class='ds-secondary'>Pick enemy heroes above to see threats.</span>")
     st.markdown(f"<div class='ds-glance'>"
                 f"<section class='ds-card {card_class}'><h3>Top item recommendation</h3>{next_item}</section>"
                 f"<section class='ds-card'><h3>Top enemy threats</h3>{top_threats}</section>"
@@ -207,14 +207,6 @@ with st.sidebar:
         scenario = st.selectbox("Mock scenario", names, format_func=lambda n: mock.load(n)["dotasense_mock"]["scenario_name"])
         state = MockProvider(scenario=scenario).current_state()
     live_status = live_gsi_status(state)
-    hero_options = sorted(C.heroes_by_name(), key=lambda h: C.hero_display(h))
-    enemies = st.multiselect("Visible enemy lineup (edit as on the scoreboard)", hero_options,
-                             default=[e for e in state.enemy_heroes if e in hero_options],
-                             format_func=C.hero_display, max_selections=5,
-                             key=f"enemies-live-{state.match_id}" if live_mode else f"enemies-mock-{scenario}")
-    state.enemy_heroes = enemies
-    if not enemies and "enemy_heroes" not in state.missing_fields:
-        state.missing_fields.append("enemy_heroes")
     use_history = st.toggle("Use OpenDota historical data", value=not settings.offline,
                             help="Recent public-match item stats and matchups. Off = rules only.")
     st.divider()
@@ -245,7 +237,7 @@ def render_gsi_setup(connected: bool) -> None:
                     f"`{dota_cfg.LAUNCH_OPTION}`.\n"
                     "3. Restart Dota 2 and start a match (or Demo Hero). This panel turns green when data arrives.")
         st.caption(f"DotaSense listens on {settings.gsi_url} (this PC only). It reads only what Dota 2 "
-                   "sends about your own hero; enemy heroes still come from the sidebar.")
+                   "sends about your own hero; pick enemy heroes in the box below.")
 
 
 if live_mode and auto_refresh and hasattr(st, "fragment"):
@@ -258,13 +250,22 @@ if live_mode and auto_refresh and hasattr(st, "fragment"):
 
     _watch_live()
 
-result = analyze(state, conn, client, use_history=use_history)
-
 tab_live, tab_post = st.tabs(["Live Match", "Post-Match Reports"])
 
 with tab_live:
     if live_mode:
         render_gsi_setup(live["connected"])
+    hero_options = sorted(C.heroes_by_name(), key=lambda h: C.hero_display(h))
+    enemies = st.multiselect("Enemy heroes (Dota 2 does not send these: pick them as on the scoreboard)", hero_options,
+                             default=[e for e in state.enemy_heroes if e in hero_options],
+                             format_func=C.hero_display, max_selections=5,
+                             key=f"enemies-live-{state.match_id}" if live_mode else f"enemies-mock-{scenario}")
+    state.enemy_heroes = enemies
+    state.missing_fields = [f for f in state.missing_fields if f != "enemy_heroes"] + ([] if enemies else ["enemy_heroes"])
+
+result = analyze(state, conn, client, use_history=use_history)
+
+with tab_live:
     st.subheader("Match at a glance")
     history_status = "History-backed" if result["used_history"] else "Rules only"
     render_glance(state, result["hero_name"], result["phase"], live_status, history_status,
@@ -288,7 +289,7 @@ with tab_live:
         st.caption(("Mock lineup · " if state.is_mock else "") +
                    "Heuristic scouting, not a live threat score. Role-only hints do not establish specific counters.")
         if not result["threats"]:
-            st.markdown(MISSING + " — add the visible enemy lineup in the sidebar", unsafe_allow_html=True)
+            st.markdown(MISSING + " — pick enemy heroes above", unsafe_allow_html=True)
         else:
             tcol, ccol = st.columns([1, 1])
             with tcol:

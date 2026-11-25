@@ -21,7 +21,7 @@ post-match coaching, with every recommendation explained.
    If Dota 2 is not found, use **Download config file** and copy it there yourself.
 4. In Steam: **Dota 2 → Properties → Launch options**, add `-gamestateintegration`.
 5. Restart Dota 2 and play a match (or Demo Hero). The sidebar shows **Live GSI: Receiving**.
-   Enemy heroes are not in GSI data: pick them in the sidebar as you see them on the scoreboard.
+   Enemy heroes are not in GSI data: pick them in the "Enemy heroes" box on the Live Match tab as you see them on the scoreboard.
 
 Data (database, GSI token, log `dotasense.log`) lives in `%LOCALAPPDATA%\DotaSenseAI`.
 The app listens on `127.0.0.1:47690` for Dota 2 (this PC only); every push must carry the
