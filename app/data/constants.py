@@ -204,7 +204,7 @@ COUNTER_ITEMS: dict[str, list[tuple[str, str, bool]]] = {
     ],
     "evasion": [
         ("monkey_king_bar", "Pierce procs bypass evasion; non-proc attacks can still miss.", False),
-        ("bloodthorn", "Attacks against the affected target cannot miss while Soul Rend holds; it can be dispelled.", False),
+        ("bloodthorn", "The caster's and their units' attacks cannot miss the Soul Rend target while the debuff holds; it can be dispelled.", False),
     ],
     "invisibility": [
         ("dust", "Carry Dust to reveal invisible heroes while fighting in its area.", True),

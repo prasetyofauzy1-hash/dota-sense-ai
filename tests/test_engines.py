@@ -79,6 +79,12 @@ def test_serpent_ward_counter_does_not_suggest_chain_lightning():
     assert "crimson_guard" in counters and "mjollnir" not in counters
 
 
+def test_bloodthorn_counter_explains_whose_attacks_cannot_miss():
+    threats = counter_analyzer.analyze_threats(["phantom_assassin"])
+    bloodthorn = next(c for c in counter_analyzer.counter_items(threats) if c.item == "bloodthorn")
+    assert "caster's and their units' attacks cannot miss" in bloodthorn.explanation
+
+
 def test_counter_shortlist_covers_distinct_threats_and_deduplicates():
     threats = counter_analyzer.analyze_threats([
         "phantom_assassin", "riki", "bristleback", "huskar", "necrolyte", "npc_dota_hero_riki",
