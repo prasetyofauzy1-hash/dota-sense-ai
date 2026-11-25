@@ -146,7 +146,8 @@ def _remove(path: Path) -> None:
 
 
 def installer_command(installer: Path, app_dir: Path, pid: int) -> list[str]:
-    return [str(installer), "/SILENT", "/NORESTART", f"/DIR={app_dir}", f"/DOTASENSEUPDATEPID={pid}"]
+    return [str(installer), "/SILENT", "/NOCANCEL", "/NORESTART",
+            f"/DIR={app_dir}", f"/DOTASENSEUPDATEPID={pid}"]
 
 
 def launch_installer(installer: Path, app_dir: Path) -> None:

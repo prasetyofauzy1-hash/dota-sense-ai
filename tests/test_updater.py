@@ -101,6 +101,13 @@ def test_check_network_error_is_actionable(monkeypatch):
         updater.check_for_update("0.0.0")
 
 
+def test_upgrade_disallows_cancellation(tmp_path):
+    installer = tmp_path / updater.INSTALLER_NAME
+    command = updater.installer_command(installer, tmp_path / "DotaSense AI", 123)
+    assert command == [str(installer), "/SILENT", "/NOCANCEL", "/NORESTART",
+                       f"/DIR={tmp_path / 'DotaSense AI'}", "/DOTASENSEUPDATEPID=123"]
+
+
 def test_failed_installer_launch_can_be_retried(tmp_path, monkeypatch):
     release = updater.parse_manifest(release_data(), "0.0.0")
     manager = updater.Updater("0.0.0", tmp_path, tmp_path / "updates")
