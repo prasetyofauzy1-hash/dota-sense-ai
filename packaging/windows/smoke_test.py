@@ -98,6 +98,7 @@ def run_ui(page, proc, dota: Path, token: str, payload: dict, out: Path) -> None
     picker.press("Enter")
     page.keyboard.press("Escape")
     page.locator(".ds-glance").get_by_text("Phantom Assassin").first.wait_for(timeout=30_000)
+    assert page.get_by_text("Missing data:").count() == 0, "enemy lineup still reported missing"
     time.sleep(2)
     page.screenshot(path=str(out / "2-live-gsi.png"), full_page=True)
     assert "MOCK DATA" not in page.content()

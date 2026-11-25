@@ -261,8 +261,7 @@ with tab_live:
                              format_func=C.hero_display, max_selections=5,
                              key=f"enemies-live-{state.match_id}" if live_mode else f"enemies-mock-{scenario}")
     state.enemy_heroes = enemies
-    if not enemies and "enemy_heroes" not in state.missing_fields:
-        state.missing_fields.append("enemy_heroes")
+    state.missing_fields = [f for f in state.missing_fields if f != "enemy_heroes"] + ([] if enemies else ["enemy_heroes"])
 
 result = analyze(state, conn, client, use_history=use_history)
 
