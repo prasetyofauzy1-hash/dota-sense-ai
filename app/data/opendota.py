@@ -173,15 +173,16 @@ class OpenDotaClient:
         path = f"/matches/{mid}"
         key = f"opendota:{path}"
         stale_unparsed: dict | None = None
-        if self.conn is not None and not force_refresh:
+        if self.conn is not None:
             cached = db.cache_get(self.conn, key, PARSED_MATCH_TTL)
             if cached is not None:
                 if _is_match_parsed(cached):
                     return cached
-                fresh_unparsed = db.cache_get(self.conn, key, UNPARSED_MATCH_TTL)
-                if fresh_unparsed is not None:
-                    return fresh_unparsed
-                stale_unparsed = cached
+                if not force_refresh:
+                    fresh_unparsed = db.cache_get(self.conn, key, UNPARSED_MATCH_TTL)
+                    if fresh_unparsed is not None:
+                        return fresh_unparsed
+                    stale_unparsed = cached
         try:
             data = self._get(path, max_age=PARSED_MATCH_TTL, force_refresh=True)
         except OpenDotaError:

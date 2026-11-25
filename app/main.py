@@ -73,15 +73,13 @@ def analysis(scenario: str | None = None, history: bool = True,
 
 
 @app.get("/coach/{match_id}")
-def coach(match_id: int, account_id: int | None = Query(None), hero_id: int | None = Query(None),
-          force_refresh: bool = Query(False)) -> dict:
+def coach(match_id: int, account_id: int | None = Query(None), hero_id: int | None = Query(None)) -> dict:
     from app.engine.coach import coach_match
 
     if account_id is None and hero_id is None:
         raise HTTPException(400, "Provide either account_id or hero_id.")
     try:
-        report = coach_match(client, match_id, account_id=account_id, hero_id=hero_id,
-                             force_refresh=force_refresh)
+        report = coach_match(client, match_id, account_id=account_id, hero_id=hero_id)
     except OpenDotaError as exc:
         if exc.status_code == 404:
             raise HTTPException(404, str(exc)) from exc
