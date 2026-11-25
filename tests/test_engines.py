@@ -174,7 +174,8 @@ def test_magic_lineup_recommends_bkb_with_all_fields():
     assert recs[0].item == "black_king_bar"
     top = recs[0]
     assert top.priority == Priority.HIGH
-    assert top.reason and top.benefit and top.alternative
+    assert top.reason and top.benefit
+    assert top.alternative != "sphere"
     assert top.remaining_gold == 4500 - top.cost and top.affordable
 
 
@@ -358,6 +359,20 @@ def test_linkens_alternative_to_bkb_requires_targeted_lockdown():
 
     assert bkb_alternative("meepo") != "sphere"
     assert bkb_alternative("sven") == "sphere"
+
+
+@pytest.mark.parametrize("enemies", [
+    ["enigma", "tidehunter"],
+    ["sven", "tidehunter"],
+    ["sven", "enigma"],
+])
+def test_linkens_is_not_bkb_alternative_against_area_or_piercing_lockdown(enemies):
+    state = MockProvider(scenario="02_midgame_juggernaut").current_state()
+    state.enemy_heroes = enemies
+    threats = counter_analyzer.analyze_threats(state.enemy_heroes)
+    recs = item_recommender.recommend_items(state, threats, limit=20)
+    assert next(r for r in recs if r.item == "black_king_bar").alternative != "sphere"
+    assert any(r.item == "sphere" for r in recs)
 
 
 def test_power_treads_still_allows_boots_of_travel_vs_pushers():
