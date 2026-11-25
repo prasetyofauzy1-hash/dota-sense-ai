@@ -67,6 +67,12 @@ def test_counter_rules_use_bundled_heroes_and_items():
     assert not counter_analyzer.analyze_threats(["unknown_hero"])
 
 
+def test_healing_counters_do_not_suggest_shivas_guard():
+    threats = counter_analyzer.analyze_threats(["abaddon"])
+    assert {c.item for c in counter_analyzer.counter_items(threats)} == {"spirit_vessel", "skadi"}
+    assert "shivas_guard" not in C.alternatives("spirit_vessel")
+
+
 def test_counter_shortlist_covers_distinct_threats_and_deduplicates():
     threats = counter_analyzer.analyze_threats([
         "phantom_assassin", "riki", "bristleback", "huskar", "necrolyte", "npc_dota_hero_riki",

@@ -225,7 +225,6 @@ COUNTER_ITEMS: dict[str, list[tuple[str, str, bool]]] = {
     ],
     "healing": [
         ("spirit_vessel", "Charged enemy cast cuts healing and regen while the debuff holds; watch for dispels.", False),
-        ("shivas_guard", "Freezing Aura reduces nearby enemy sustain.", True),
         ("skadi", "Repeated attacks apply healing reduction to the target.", False),
     ],
     "passive": [
@@ -290,7 +289,7 @@ ALTERNATIVES = {
     "gem": "dust",
     "mjollnir": ("bfury", "gungir"),
     "bfury": "mjollnir",
-    "spirit_vessel": "shivas_guard",
+    "spirit_vessel": "skadi",
     "shivas_guard": "skadi",
     "skadi": "spirit_vessel",
     "silver_edge": "black_king_bar",
