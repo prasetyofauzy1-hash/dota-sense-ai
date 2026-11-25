@@ -130,7 +130,7 @@ if live_mode and auto_refresh and hasattr(st, "fragment"):
 
     @st.fragment(run_every=2)
     def _watch_live() -> None:
-        if live_provider.received_at() != seen:
+        if live_provider.received_at() != seen or live_provider.status()["connected"] != live["connected"]:
             st.rerun()
 
     _watch_live()

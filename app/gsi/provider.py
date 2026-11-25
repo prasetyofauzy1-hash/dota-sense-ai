@@ -78,8 +78,9 @@ class LiveGSIProvider:
         return None if received_at is None else max(0.0, time.time() - received_at)
 
     def current_state(self) -> GameState:
-        payload, _ = self._read()
-        if not settings.live_integration_enabled or payload is None:
+        payload, received_at = self._read()
+        stale = received_at is None or time.time() - received_at > settings.gsi_stale_seconds
+        if not settings.live_integration_enabled or payload is None or stale:
             return GameState(source=DataSource.NONE, missing_fields=["live_data"])
         return parse_gsi(payload, source=DataSource.LIVE_GSI)
 
