@@ -162,3 +162,13 @@ def test_invisibility_lineup_shows_at_most_one_detection_item():
     recs = item_recommender.recommend_items(state, threats)
     detection = [r.item for r in recs if r.item in {"dust", "ward_sentry", "gem"}]
     assert detection == ["dust"]
+
+
+def test_counter_alternatives_also_counter_the_threat():
+    state = MockProvider(scenario="02_midgame_juggernaut").current_state()
+    state.enemy_heroes = ["necrolyte", "silencer"]
+    threats = counter_analyzer.analyze_threats(state.enemy_heroes)
+    recs = item_recommender.recommend_items(state, threats, limit=20)
+    by_item = {r.item: r for r in recs}
+    assert by_item["skadi"].alternative in {"spirit_vessel", "shivas_guard"}
+    assert by_item["manta"].alternative in {"black_king_bar", "cyclone"}

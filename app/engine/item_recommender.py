@@ -93,6 +93,25 @@ def _popularity_share(popularity: dict | None, phase_key: str, item: str) -> flo
     return bucket.get(str(item_id), 0) / total
 
 
+def _pick_alternative(item: str, counters: dict[str, list[str]], owned: set[str], hero: dict) -> str | None:
+    def valid(a: str) -> bool:
+        return a != item and a in C.items() and not _owned_or_upgraded(a, owned) and _fit_weight(a, hero) >= 0.5
+
+    alts = C.alternatives(item)
+    if counters:
+        same_threat = list(dict.fromkeys(
+            ci for tag in counters for ci, _, _ in C.COUNTER_ITEMS.get(tag, []) if ci != item
+        ))
+        same_threat_set = set(same_threat)
+        match = next((a for a in alts if a in same_threat_set and valid(a)), None)
+        if match:
+            return match
+        match = next((a for a in same_threat if valid(a)), None)
+        if match:
+            return match
+    return next((a for a in alts if valid(a)), None)
+
+
 def recommend_items(state: GameState, threats: list[Threat], *, popularity: dict | None = None,
                     limit: int = 5) -> list[ItemRecommendation]:
     hero = C.heroes_by_name().get(C.hero_short(state.hero.name) or "")
@@ -149,8 +168,7 @@ def recommend_items(state: GameState, threats: list[Threat], *, popularity: dict
             if share >= 0.01:
                 reasons.append(f"{share:.0%} of recent {phase_key}-phase purchases on this hero (OpenDota)")
         cost = C.item_cost(item)
-        alt = next((a for a in C.alternatives(item)
-                    if a in C.items() and not _owned_or_upgraded(a, owned) and _fit_weight(a, hero) >= 0.5), None)
+        alt = _pick_alternative(item, c["counters"], owned, hero)
         needed, owned_comps = _gold_needed_with_components(item, state.items)
         counter_hits = sum(len(h) for h in c["counters"].values())
         if phase_key == "laning":
