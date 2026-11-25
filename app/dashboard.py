@@ -16,8 +16,8 @@ from app.data.opendota import OpenDotaClient, OpenDotaError, snapshot_meta  # no
 from app.database import models as db  # noqa: E402
 from app.database.connection import connect  # noqa: E402
 from app.engine.coach import coach_match  # noqa: E402
-from app.gsi.provider import LiveGSIProvider, MockProvider  # noqa: E402
-from app.models import GameState, ItemRecommendation, Priority, Threat  # noqa: E402
+from app.gsi.provider import MockProvider  # noqa: E402
+from app.models import DataSource, GameState, ItemRecommendation, Priority, Threat  # noqa: E402
 from app.services import analyze  # noqa: E402
 
 st.set_page_config(page_title="DotaSense AI", page_icon="🛡️", layout="wide", initial_sidebar_state="collapsed")
@@ -92,12 +92,26 @@ def item_budget(rec: ItemRecommendation) -> str:
     return "Gold not available"
 
 
+def live_gsi_status(state: GameState) -> str:
+    if not settings.live_integration_enabled:
+        return "Off"
+    if state.is_mock:
+        return "On · mock view"
+    if state.source == DataSource.LIVE_GSI:
+        return "Receiving data"
+    return "Waiting for game"
+
+
 def render_glance(state: GameState, hero_name: str, phase: str, live_status: str, history_status: str,
                   recommendations: list[ItemRecommendation], threats: list[Threat]) -> None:
-    scenario = escape((state.scenario_name or "").removeprefix("MOCK: "))
-    source = ("<span class='ds-badge ds-b-sit'>MOCK DATA</span>"
-              f"<span>{scenario or 'Practice scenario'} · Not a real match</span>"
-              if state.is_mock else "<span class='ds-badge ds-b-unc'>No mock data</span>")
+    if state.is_mock:
+        scenario = escape((state.scenario_name or "").removeprefix("MOCK: "))
+        source = ("<span class='ds-badge ds-b-sit'>MOCK DATA</span>"
+                  f"<span>{scenario or 'Practice scenario'} · Not a real match</span>")
+    elif state.source == DataSource.LIVE_GSI:
+        source = "<span class='ds-badge ds-b-unc'>LIVE DATA</span>"
+    else:
+        source = "<span class='ds-badge ds-b-unc'>No match data</span>"
     metrics = [
         ("Game time", fmt_time(state.game_time), "ds-clock"),
         ("Match", "Active" if state.match_active else "Not detected", ""),
@@ -149,12 +163,12 @@ def render_glance(state: GameState, hero_name: str, phase: str, live_status: str
 with st.sidebar:
     st.title("🛡️ DotaSense AI")
     st.caption("Read-only Dota 2 companion · no automation · no game modification")
-    live = LiveGSIProvider().status()
-    st.caption(live["detail"])
     st.divider()
     names = mock.scenario_names()
     scenario = st.selectbox("Mock scenario", names, format_func=lambda n: mock.load(n)["dotasense_mock"]["scenario_name"])
     state = MockProvider(scenario=scenario).current_state()
+    live_status = live_gsi_status(state)
+    st.caption(f"Live GSI: {live_status}")
     hero_options = sorted(C.heroes_by_name(), key=lambda h: C.hero_display(h))
     enemies = st.multiselect("Visible enemy lineup (edit as on the scoreboard)", hero_options,
                              default=[e for e in state.enemy_heroes if e in hero_options],
@@ -174,8 +188,6 @@ tab_live, tab_post = st.tabs(["Live Match", "Post-Match Reports"])
 
 with tab_live:
     st.subheader("Match at a glance")
-    live_status = ("Disabled" if not settings.live_integration_enabled else
-                   "Connected" if live["connected"] else "Waiting for data")
     history_status = "History-backed" if result["used_history"] else "Rules only"
     render_glance(state, result["hero_name"], result["phase"], live_status, history_status,
                   result["recommendations"], result["threats"])
