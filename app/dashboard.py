@@ -123,7 +123,7 @@ with tab_live:
                 "Level": a.level,
                 "Cooldown": "Ready" if not a.cooldown else f"{a.cooldown:.0f}s",
                 "Ultimate": "★" if a.ultimate else "",
-            } for a in state.abilities]), hide_index=True, use_container_width=True)
+            } for a in state.abilities]), hide_index=True, width="stretch")
         else:
             st.markdown(MISSING, unsafe_allow_html=True)
     with right:
