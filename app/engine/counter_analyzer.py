@@ -18,14 +18,12 @@ def hero_tags(hero: str) -> tuple[list[str], str]:
 
 
 def hero_abilities(hero: str) -> list[str]:
-    """Display names of a hero's abilities (from the OpenDota constants snapshot)."""
-    from app.data.opendota import _load_snapshot
-
-    full = f"{C.HERO_PREFIX}{C.hero_short(hero)}"
-    raw = _load_snapshot("hero_abilities").get(full, {}).get("abilities", [])
-    prefix = f"{C.hero_short(hero)}_"
-    names = [a for a in raw if a and a != "generic_hidden"]
-    return [a.removeprefix(prefix).replace("_", " ").title() for a in names]
+    """Display snapshot abilities with the curated threat drivers first."""
+    short = C.hero_short(hero)
+    keys = C.hero_ability_keys(hero)
+    priority = (f"{short}_{suffix}" for suffix in C.THREAT_ABILITY_SUFFIXES.get(short, ()))
+    ordered = dict.fromkeys([*(key for key in priority if key in keys), *keys])
+    return [C.ability_display(hero, key) for key in ordered]
 
 
 def analyze_threats(enemy_heroes: list[str], *, my_hero_id: int | None = None,
@@ -67,6 +65,7 @@ def counter_items(threats: list[Threat], owned: list[str] | None = None,
     merged: dict[str, CounterItem] = {}
     options: dict[str, list[str]] = {}
     reasons: dict[str, dict[str, str]] = {}
+    details: dict[str, list[str]] = {}
     coverage: dict[str, dict[str, float]] = {}
     for threat in threats:
         for tag in threat.tags:
@@ -88,9 +87,12 @@ def counter_items(threats: list[Threat], owned: list[str] | None = None,
                 if threat.hero_name not in entry.against_heroes:
                     entry.against_heroes.append(threat.hero_name)
                     coverage.setdefault(item, {})[threat.hero] = threat.severity
+                detail = C.counter_detail(item, threat.hero, tag)
+                if detail:
+                    details.setdefault(item, []).append(detail)
 
     for item, entry in merged.items():
-        entry.explanation = " ".join(dict.fromkeys(reasons[item].values()))
+        entry.explanation = " ".join(dict.fromkeys([*reasons[item].values(), *details.get(item, [])]))
 
     focus = dict.fromkeys((*C.COUNTER_FOCUS, *options))
     first = dict.fromkeys(options[tag][0] for tag in focus if tag in options)

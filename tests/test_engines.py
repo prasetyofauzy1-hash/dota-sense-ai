@@ -72,6 +72,39 @@ def test_counter_rules_use_bundled_heroes_and_items():
     assert not counter_analyzer.analyze_threats(["unknown_hero"])
 
 
+def test_enemy_ability_preview_prioritizes_threat_drivers():
+    state = _state()
+    state.enemy_heroes = ["enigma", "tidehunter", "doom_bringer", "legion_commander", "magnataur"]
+    abilities = analyze(state, use_history=False)["enemy_abilities"]
+    assert abilities["Enigma"][:2] == ["Black Hole", "Malefice"]
+    assert abilities["Tidehunter"][0] == "Ravage"
+    assert abilities["Doom"][0] == "Doom"
+    assert abilities["Legion Commander"][0] == "Duel"
+    assert abilities["Magnus"][:2] == ["Reverse Polarity", "Skewer"]
+
+
+def test_preview_omits_a_curated_key_missing_from_snapshot(monkeypatch):
+    monkeypatch.setattr(C, "hero_ability_keys", lambda hero: ["enigma_malefice", "enigma_midnight_pulse"])
+    assert counter_analyzer.hero_abilities("enigma") == ["Malefice", "Midnight Pulse"]
+
+
+@pytest.mark.parametrize("has_grasp", [True, False])
+def test_medusa_bkb_card_names_the_spell_only_if_in_snapshot(monkeypatch, has_grasp):
+    if not has_grasp:
+        monkeypatch.setattr(C, "hero_ability_keys", lambda hero: ["medusa_stone_gaze"])
+    state = _state()
+    state.enemy_heroes = ["meepo", "medusa"]
+    result = analyze(state, use_history=False)
+    counter = next(c for c in result["counters"] if c.item == "black_king_bar")
+    recommendation = next(r for r in result["recommendations"] if r.item == "black_king_bar")
+    for text in (counter.explanation, recommendation.benefit):
+        if has_grasp:
+            assert "Against Medusa, BKB helps against Gorgon's Grasp, not Stone Gaze." in text
+        else:
+            assert "Against Medusa, BKB helps against non-piercing control, not piercing lockdown." in text
+            assert "Gorgon's Grasp" not in text
+
+
 def test_healing_counters_do_not_suggest_shivas_guard():
     threats = counter_analyzer.analyze_threats(["abaddon"])
     assert {c.item for c in counter_analyzer.counter_items(threats)} == {"spirit_vessel", "skadi"}
