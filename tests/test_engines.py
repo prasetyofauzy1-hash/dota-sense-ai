@@ -73,6 +73,12 @@ def test_healing_counters_do_not_suggest_shivas_guard():
     assert "shivas_guard" not in C.alternatives("spirit_vessel")
 
 
+def test_serpent_ward_counter_does_not_suggest_chain_lightning():
+    threats = counter_analyzer.analyze_threats(["shadow_shaman"])
+    counters = {c.item for c in counter_analyzer.counter_items(threats)}
+    assert "crimson_guard" in counters and "mjollnir" not in counters
+
+
 def test_counter_shortlist_covers_distinct_threats_and_deduplicates():
     threats = counter_analyzer.analyze_threats([
         "phantom_assassin", "riki", "bristleback", "huskar", "necrolyte", "npc_dota_hero_riki",

@@ -218,7 +218,6 @@ COUNTER_ITEMS: dict[str, list[tuple[str, str, bool]]] = {
     ],
     "summons": [
         ("crimson_guard", "Team damage block helps against many small physical hits from controlled units.", True),
-        ("mjollnir", "Chain lightning helps thin out groups of summons.", False),
     ],
     "clones": [
         ("shivas_guard", "Area slow helps keep Meepo clones grouped; focus one exposed clone rather than splitting damage.", True),
