@@ -103,6 +103,11 @@ def run_ui(page, proc, dota: Path, token: str, payload: dict, out: Path) -> None
     page.screenshot(path=str(out / "2-live-gsi.png"), full_page=True)
     assert "MOCK DATA" not in page.content()
 
+    page.get_by_role("tab", name="Pro Counter Intel").click()
+    page.get_by_text("Pro tournament counter items", exact=True).wait_for()
+    page.get_by_text("selected pro tournaments", exact=False).wait_for()
+    page.get_by_text("Juggernaut across all opponents").or_(page.get_by_text("Juggernaut against")).wait_for()
+
     quit_button = page.get_by_role("button", name="Quit DotaSense AI")
     expand = page.locator("[data-testid=stExpandSidebarButton]")
     if expand.count() and expand.first.is_visible():

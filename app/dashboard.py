@@ -20,6 +20,7 @@ from app.engine.coach import coach_match, parse_account_id  # noqa: E402
 from app.gsi import dota_cfg  # noqa: E402
 from app.gsi.provider import LiveGSIProvider, MockProvider  # noqa: E402
 from app.models import CounterItem, DataSource, GameState, ItemRecommendation, Priority, Threat  # noqa: E402
+from app.pro_counter_panel import render_pro_counter_panel  # noqa: E402
 from app.services import analyze  # noqa: E402
 
 st.set_page_config(page_title="DotaSense AI", page_icon="🛡️", layout="wide", initial_sidebar_state="collapsed")
@@ -250,7 +251,7 @@ if live_mode and auto_refresh and hasattr(st, "fragment"):
 
     _watch_live()
 
-tab_live, tab_post = st.tabs(["Live Match", "Post-Match Reports"])
+tab_live, tab_post, tab_pro = st.tabs(["Live Match", "Post-Match Reports", "Pro Counter Intel"])
 
 with tab_live:
     if live_mode:
@@ -302,6 +303,7 @@ with tab_live:
                                 f"<small>Abilities: {escape(abil or 'n/a')} · {src}</small></div>", unsafe_allow_html=True)
             with ccol:
                 st.markdown("**Counter items**")
+                st.caption("See the Pro Counter Intel tab for tournament results against a specific enemy.")
                 counters = result["counters"]
                 if not counters:
                     st.caption("No new counter items supported by these tags and your inventory.")
@@ -439,3 +441,6 @@ with tab_post:
                 st.markdown(f"- {s}")
             od_url = rep.get("opendota_url") or f"https://www.opendota.com/matches/{rep['match_id']}"
             st.caption(f"Source: {rep.get('source', 'OpenDota')} · [View full match on OpenDota]({od_url})")
+
+with tab_pro:
+    render_pro_counter_panel(state, hero_options)
