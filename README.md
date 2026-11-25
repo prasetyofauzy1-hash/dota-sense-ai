@@ -63,8 +63,9 @@ python -m venv .venv
 pip install -r requirements.txt
 
 streamlit run app/dashboard.py          # dashboard  -> http://localhost:8501
-uvicorn app.main:app --reload           # optional API (separate terminal) -> http://localhost:8000/docs
+uvicorn app.main:app --port 47690      # API + live GSI receiver (separate terminal) -> http://localhost:47690/docs
 pytest -q                               # tests (run offline)
+python -m app.desktop                   # or: both of the above in one window, like the Windows app
 ```
 
 > **Windows PowerShell note:** If script execution is restricted when activating `.venv`, run commands directly without activating: `.venv\Scripts\python -m pip install -r requirements.txt` and `.venv\Scripts\streamlit run app/dashboard.py`. Set optional environment variables with `$env:DOTASENSE_OFFLINE="true"`.
