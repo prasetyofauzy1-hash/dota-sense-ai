@@ -12,10 +12,10 @@ import streamlit as st  # noqa: E402
 
 from app.config import settings  # noqa: E402
 from app.data import constants as C  # noqa: E402
-from app.data.opendota import OpenDotaClient, OpenDotaError, snapshot_meta  # noqa: E402
+from app.data.opendota import OpenDotaClient, OpenDotaError, parse_match_id, snapshot_meta  # noqa: E402
 from app.database import models as db  # noqa: E402
 from app.database.connection import connect  # noqa: E402
-from app.engine.coach import coach_match  # noqa: E402
+from app.engine.coach import coach_match, parse_account_id  # noqa: E402
 from app.gsi.provider import MockProvider  # noqa: E402
 from app.models import DataSource, GameState, ItemRecommendation, Priority, Threat  # noqa: E402
 from app.services import analyze  # noqa: E402
@@ -31,6 +31,7 @@ st.markdown("""
 .ds-badge {display:inline-block;padding:2px 8px;border-radius:6px;font-size:.8rem;font-weight:700;margin-right:6px;}
 .ds-b-high {background:#e8473c33;color:#ff8077;}
 .ds-b-sit {background:#f2b13433;color:#f7c25d;}
+.ds-b-ok {background:#2ecc7133;color:#5be08f;}
 .ds-b-unc {background:#6b728033;color:#b8bfcc;}
 .ds-b-missing {background:#ab88ff26;color:#dccaff;}
 .ds-status,.ds-metrics,.ds-inventory {display:flex;flex-wrap:wrap;gap:.5rem;}
@@ -82,6 +83,19 @@ def item_priority(rec: ItemRecommendation) -> tuple[str, str, str]:
         Priority.SITUATIONAL: ("ds-sit", "ds-b-sit", "Situational"),
         Priority.LOW: ("", "ds-b-unc", "Low priority"),
     }[rec.priority]
+
+
+def item_price(rec: ItemRecommendation) -> str:
+    if rec.cost is None:
+        return "Cost not available"
+    if rec.owned_components and rec.upgrade_cost is not None:
+        components = escape(", ".join(rec.owned_components))
+        return f"{rec.cost:,} gold · {rec.upgrade_cost:,} gold to finish (have {components})"
+    return f"{rec.cost:,} gold"
+
+
+def buy_now_badge(rec: ItemRecommendation) -> str:
+    return "<span class='ds-badge ds-b-ok'>Buy now</span>" if rec.affordable else ""
 
 
 def item_budget(rec: ItemRecommendation) -> str:
@@ -139,10 +153,12 @@ def render_glance(state: GameState, hero_name: str, phase: str, live_status: str
     if recommendations:
         top = recommendations[0]
         card_class, badge_class, label = item_priority(top)
-        price = f"{top.cost:,} gold" if top.cost is not None else "Cost not available"
         next_item = (f"<span class='ds-badge {badge_class}'>{label}</span>"
+                     f"{buy_now_badge(top)}"
                      f"<strong class='ds-item-name'>{escape(top.item_name)}</strong>"
-                     f"<span class='ds-secondary'>{price}</span><br><strong>{item_budget(top)}</strong>")
+                     f"<span class='ds-secondary'>{item_price(top)}</span><br><strong>{item_budget(top)}</strong>")
+    if not state.enemy_heroes:
+        next_item += "<br><span class='ds-secondary'>Core build only · Add enemies in the sidebar for counter items.</span>"
     if threats:
         rows = []
         for threat in threats[:2]:
@@ -201,8 +217,8 @@ with tab_live:
             card_class, badge_class, label = item_priority(r)
             alt = f"<br><b>Alternative:</b> {escape(r.alternative_name)}" if r.alternative_name else ""
             st.markdown(
-                f"<div class='ds-card {card_class}'><span class='ds-badge {badge_class}'>{label}</span>"
-                f"<b>{escape(r.item_name)}</b> <small>({val(r.cost)} gold)</small><br><b>Why:</b> {escape(r.reason)}<br>"
+                f"<div class='ds-card {card_class}'><span class='ds-badge {badge_class}'>{label}</span>{buy_now_badge(r)}"
+                f"<b>{escape(r.item_name)}</b> <small>({item_price(r)})</small><br><b>Why:</b> {escape(r.reason)}<br>"
                 f"<b>Benefit:</b> {escape(r.benefit)}{alt}<br><small>{item_budget(r)} · score {r.score}</small></div>",
                 unsafe_allow_html=True)
 
@@ -266,41 +282,90 @@ with tab_post:
     st.caption("Fetches a real public match from OpenDota. Match details must be public on your Dota 2 profile.")
     with st.form("coach"):
         m1, m2 = st.columns(2)
-        match_id = m1.text_input("Match ID")
-        account_id = m2.text_input("Your Steam32 account ID (optional if you pick a hero)")
-        hero_pick = st.selectbox("…or your hero in that match", ["—"] + hero_options, format_func=lambda h: h if h == "—" else C.hero_display(h))
+        match_id = m1.text_input("Match ID or OpenDota/Dotabuff URL", placeholder="e.g. 9104260611")
+        account_id = m2.text_input("Your Steam32 or Steam64 ID (optional if you pick a hero)", placeholder="e.g. 123456789")
+        h1, h2 = st.columns([3, 1])
+        hero_pick = h1.selectbox("…or your hero in that match", ["—"] + hero_options,
+                                 format_func=lambda h: h if h == "—" else C.hero_display(h))
+        force_refresh = h2.checkbox("Force refresh", help="Bypass cache (useful after requesting a parse on OpenDota)")
         submitted = st.form_submit_button("Analyse match")
     if submitted:
         hero_id = C.heroes_by_name()[hero_pick]["id"] if hero_pick != "—" else None
-        if not match_id.strip().isdigit():
-            st.error("Enter a numeric match ID.")
-        elif account_id.strip() and not account_id.strip().isdigit():
-            st.error("Enter a numeric Steam32 account ID.")
-        elif not account_id.strip() and hero_id is None:
-            st.error("Enter your account ID or pick your hero.")
+        try:
+            parsed_mid = parse_match_id(match_id)
+            parsed_acc = parse_account_id(account_id)
+        except ValueError as exc:
+            st.error(str(exc))
         else:
-            try:
-                report = coach_match(client, int(match_id), account_id=int(account_id) if account_id.strip() else None,
-                                     hero_id=hero_id)
-                db.save_report(conn, report)
-                st.success(f"Report saved for match {report['match_id']}")
-            except (OpenDotaError, ValueError) as exc:
-                st.error(str(exc))
-    for rep in db.list_reports(conn):
-        with st.expander(f"Match {rep['match_id']} · {rep['hero']} · {rep['result']} · {rep['duration_min']} min"):
-            c = st.columns(4)
-            c[0].metric("K/D/A", rep["kda"])
-            c[1].metric("GPM", rep["gpm"])
-            c[2].metric("XPM", rep["xpm"])
-            c[3].metric("Last hits", rep["last_hits"])
-            st.markdown("**Final items:** " + (", ".join(rep["final_items"]) or "n/a"))
-            if rep["item_timings"]:
-                st.dataframe(pd.DataFrame(rep["item_timings"])[["item_name", "minute", "cost"]], hide_index=True)
+            if parsed_acc is None and hero_id is None:
+                st.error("Enter your account ID or pick your hero.")
             else:
-                st.markdown(MISSING + " (item timings need a parsed match)", unsafe_allow_html=True)
-            if rep["benchmarks_pct"]:
-                st.markdown("**Percentile vs players on this hero (OpenDota benchmarks):** " +
-                            ", ".join(f"{k.replace('_', ' ')} {v}%" for k, v in rep["benchmarks_pct"].items()))
-            st.markdown("**Suggestions**")
-            for s in rep["suggestions"]:
+                try:
+                    with st.spinner("Fetching match from OpenDota…"):
+                        report = coach_match(
+                            client, parsed_mid, account_id=parsed_acc,
+                            hero_id=hero_id, force_refresh=force_refresh,
+                        )
+                    db.save_report(conn, report)
+                    st.success(f"Report saved for match {report['match_id']} ({report['hero']})")
+                except (OpenDotaError, ValueError) as exc:
+                    st.error(str(exc))
+
+    saved_reports = db.list_reports(conn)
+    if not saved_reports:
+        st.caption("No reports yet. Enter a recent public match ID above to generate your first post-match review.")
+    for idx, rep in enumerate(saved_reports):
+        role_tag = f" ({rep['role']})" if rep.get("role") else ""
+        mode_tag = f" · {rep['game_mode']}" if rep.get("game_mode") else ""
+        parse_tag = "Parsed" if rep.get("parsed") else "Unparsed"
+        header = (
+            f"Match {rep['match_id']} · {rep['hero']}{role_tag} · "
+            f"{rep['result']} · {rep['duration_min']} min{mode_tag} · {parse_tag}"
+        )
+        with st.expander(header, expanded=(idx == 0)):
+            r1 = st.columns(4)
+            r1[0].metric("K / D / A", rep["kda"])
+            r1[1].metric("GPM", rep.get("gpm", "—"))
+            r1[2].metric("XPM", rep.get("xpm", "—"))
+            r1[3].metric("Last hits", rep.get("last_hits", "—"))
+            r2 = st.columns(4)
+            r2[0].metric("Kill part.", f"{rep['kill_participation_pct']}%" if rep.get("kill_participation_pct") is not None else "—")
+            r2[1].metric("Hero damage", f"{rep['hero_damage']:,}" if rep.get("hero_damage") is not None else "—")
+            r2[2].metric("Tower damage", f"{rep['tower_damage']:,}" if rep.get("tower_damage") is not None else "—")
+            wards = rep.get("wards")
+            r2[3].metric("Wards (Obs/Sen)", f"{wards['obs']} / {wards['sen']}" if wards is not None else "n/a")
+
+            items_line = ", ".join(rep.get("final_items") or []) or "n/a"
+            extras = []
+            if rep.get("neutral_item"):
+                extras.append(f"Neutral: {rep['neutral_item']}")
+            if rep.get("consumed_buffs"):
+                extras.append("Buffs: " + ", ".join(rep["consumed_buffs"]))
+            st.markdown("**Final items:** " + items_line + (f" · {' · '.join(extras)}" if extras else ""))
+
+            if rep.get("item_timings"):
+                df_timings = pd.DataFrame(rep["item_timings"])[["item_name", "minute", "cost"]].rename(
+                    columns={"item_name": "Item", "minute": "Minute", "cost": "Cost (gold)"}
+                )
+                st.dataframe(df_timings, hide_index=True, use_container_width=True)
+            elif rep.get("parsed"):
+                st.caption("No major completed items recorded in this parsed match.")
+            else:
+                req_url = rep.get("parse_request_url") or f"https://www.opendota.com/request#{rep['match_id']}"
+                st.markdown(
+                    f"{MISSING} — match is not parsed on OpenDota "
+                    f"(<a href='{req_url}' target='_blank'>request a parse</a>, then re-run with Force refresh).",
+                    unsafe_allow_html=True,
+                )
+
+            if rep.get("benchmarks_pct"):
+                st.markdown(
+                    "**Benchmarks vs players on this hero** *(higher % = better, including fewer deaths)*: "
+                    + " · ".join(f"{k.replace('_', ' ')} **{v}%**" for k, v in rep["benchmarks_pct"].items())
+                )
+
+            st.markdown("**Coaching suggestions**")
+            for s in rep.get("suggestions") or []:
                 st.markdown(f"- {s}")
+            od_url = rep.get("opendota_url") or f"https://www.opendota.com/matches/{rep['match_id']}"
+            st.caption(f"Source: {rep.get('source', 'OpenDota')} · [View full match on OpenDota]({od_url})")
