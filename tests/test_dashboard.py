@@ -56,6 +56,10 @@ def test_match_glance_distinguishes_mock_live_status_and_missing_lineup(monkeypa
     assert not dashboard.exception
     status = next(block.value for block in dashboard.tabs[0].markdown if "ds-status'" in block.value)
     assert "No match data" in status and "Live GSI: Waiting for game" in status
+    setup = next(panel for panel in dashboard.tabs[0].expander
+                 if panel.label == "Connect Dota 2 (Game State Integration)")
+    assert any("Open the sidebar and look for the green **Live GSI** badge with **Receiving** next to it."
+               in block.value for block in setup.markdown)
 
     dashboard.radio[0].set_value("Mock scenario").run()
     assert not dashboard.exception
