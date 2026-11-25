@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from app.data import constants as C
+from app.engine.item_recommender import _fit_weight, _owned_or_upgraded
 from app.models import CounterItem, Threat
 
 
@@ -37,19 +38,23 @@ def analyze_threats(enemy_heroes: list[str], *, my_hero_id: int | None = None,
             winrates[m["hero_id"]] = (m["wins"] / m["games_played"], m["games_played"])
 
     threats: list[Threat] = []
+    seen = set()
     for enemy in enemy_heroes:
         short = C.hero_short(enemy)
-        info = C.heroes_by_name().get(short or "")
-        tags, source = hero_tags(enemy)
-        severity = 1.0 + 0.5 * len(tags)
-        parts = [", ".join(C.THREAT_LABELS[t] for t in tags) or "No known threat tags"]
-        if info and info["id"] in winrates:
+        if short not in C.heroes_by_name() or short in seen:
+            continue
+        seen.add(short)
+        info = C.heroes_by_name()[short]
+        tags, source = hero_tags(short)
+        severity = 1.0 + (0.5 if source == "curated" else 0.25) * len(tags)
+        parts = [", ".join(C.THREAT_LABELS[t] for t in tags) or "No mechanic identified from roles"]
+        if info["id"] in winrates:
             wr, games = winrates[info["id"]]
             if games >= 20:
                 severity += max(0.0, (0.5 - wr) * 10)
                 parts.append(f"your hero won {wr:.0%} of {games} recent public games against it (OpenDota)")
         threats.append(Threat(
-            hero=short or enemy, hero_name=C.hero_display(enemy), tags=tags,
+            hero=short, hero_name=info["localized_name"], tags=tags,
             severity=round(severity, 2), explanation="; ".join(parts), tags_source=source,
         ))
     return sorted(threats, key=lambda t: t.severity, reverse=True)
@@ -57,24 +62,38 @@ def analyze_threats(enemy_heroes: list[str], *, my_hero_id: int | None = None,
 
 def counter_items(threats: list[Threat], owned: list[str] | None = None,
                   my_hero: str | None = None) -> list[CounterItem]:
-    from app.engine.item_recommender import _fit_weight
-
     owned_set = set(owned or [])
-    hero = C.heroes_by_name().get(C.hero_short(my_hero) or "") if my_hero else None
+    hero = C.heroes_by_name().get(C.hero_short(my_hero) or "")
     merged: dict[str, CounterItem] = {}
+    options: dict[str, list[str]] = {}
+    reasons: dict[str, dict[str, str]] = {}
+    coverage: dict[str, dict[str, float]] = {}
     for threat in threats:
         for tag in threat.tags:
             for item, why, defensive in C.COUNTER_ITEMS.get(tag, []):
-                if item in owned_set or (hero and _fit_weight(item, hero) == 0.0):
+                if item not in C.items() or _owned_or_upgraded(item, owned_set):
+                    continue
+                if hero and _fit_weight(item, hero) == 0.0:
                     continue
                 entry = merged.get(item)
                 if entry is None:
                     entry = merged[item] = CounterItem(
                         item=item, item_name=C.item_display(item), counters=[], against_heroes=[],
-                        explanation=why, defensive=defensive,
+                        explanation="", defensive=defensive,
                     )
                 if C.THREAT_LABELS[tag] not in entry.counters:
                     entry.counters.append(C.THREAT_LABELS[tag])
+                    options.setdefault(tag, []).append(item)
+                    reasons.setdefault(item, {})[tag] = why
                 if threat.hero_name not in entry.against_heroes:
                     entry.against_heroes.append(threat.hero_name)
-    return sorted(merged.values(), key=lambda c: len(c.against_heroes) + len(c.counters), reverse=True)
+                    coverage.setdefault(item, {})[threat.hero] = threat.severity
+
+    for item, entry in merged.items():
+        entry.explanation = " ".join(dict.fromkeys(reasons[item].values()))
+
+    focus = dict.fromkeys((*C.COUNTER_FOCUS, *options))
+    first = dict.fromkeys(options[tag][0] for tag in focus if tag in options)
+    rest = sorted(merged.keys() - first.keys(),
+                  key=lambda item: (-sum(coverage[item].values()), -len(reasons[item]), item))
+    return [merged[item] for item in (*first, *rest)]
