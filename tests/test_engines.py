@@ -118,11 +118,36 @@ def test_counter_shortlist_covers_distinct_threats_and_deduplicates():
 def test_disable_counters_match_how_the_spell_works():
     threats = counter_analyzer.analyze_threats(["lion", "silencer", "enigma", "faceless_void", "doom_bringer"])
     counters = {c.item: c for c in counter_analyzer.counter_items(threats)}
-    assert set(counters["sphere"].against_heroes) == {"Lion", "Doom"}
+    assert set(counters["sphere"].against_heroes) == {"Lion", "Doom", "Enigma", "Silencer"}
     assert counters["manta"].against_heroes == ["Silencer"]
     assert set(counters["black_king_bar"].against_heroes) == {"Lion", "Silencer"}
     assert {"Enigma", "Faceless Void", "Doom"} <= set(counters["aeon_disk"].against_heroes)
     assert "does not block" in counters["lotus_orb"].explanation and "Basic dispel" in counters["lotus_orb"].explanation
+
+
+@pytest.mark.parametrize(("hero", "targeted"), [
+    ("alchemist", True),
+    ("antimage", True),
+    ("enigma", True),
+    ("invoker", True),
+    ("morphling", True),
+    ("naga_siren", True),
+    ("oracle", True),
+    ("silencer", True),
+    ("skywrath_mage", True),
+    ("storm_spirit", True),
+    ("witch_doctor", True),
+    ("zuus", True),
+    ("faceless_void", False),
+    ("meepo", False),
+    ("tidehunter", False),
+    ("tiny", False),
+])
+def test_linkens_counter_matches_curated_targeted_lockdown(hero, targeted):
+    threats = counter_analyzer.analyze_threats([hero])
+    assert threats[0].tags_source == "curated"
+    assert ("targeted_disable" in threats[0].tags) == targeted
+    assert ("sphere" in {c.item for c in counter_analyzer.counter_items(threats)}) == targeted
 
 
 def test_counter_items_respect_owned_upgrades_and_ranged_fit():
