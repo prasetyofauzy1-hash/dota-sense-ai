@@ -1,0 +1,5 @@
+{
+  "source": "https://api.opendota.com/api/constants",
+  "fetched_at": "2026-11-25T04:40:51.821285Z",
+  "note": "Trimmed snapshot of OpenDota constants, used as offline fallback."
+}
