@@ -93,6 +93,13 @@ def _find_player(match: dict, account_id: int | None, hero_id: int | None) -> di
     if hero_id is not None:
         for p in players:
             if p.get("hero_id") == hero_id:
+                if account_id is not None and p.get("account_id") not in (None, account_id):
+                    hero_name = C.heroes().get(hero_id, {}).get("localized_name") or f"hero #{hero_id}"
+                    raise ValueError(
+                        f"Account ID {account_id} was not found in this match, and {hero_name} "
+                        f"was played by a different public account ({p.get('account_id')}). "
+                        "Check your match ID, account ID, or hero selection."
+                    )
                 return p
     return None
 

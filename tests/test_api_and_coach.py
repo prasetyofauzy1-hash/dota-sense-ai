@@ -224,3 +224,20 @@ def test_opendota_client_retries_429_and_handles_errors(tmp_path):
     client_bad = OpenDotaClient(conn, offline=False, http=FakeSession([bad_json]), max_retries=0, backoff_base=0)
     with pytest.raises(OpenDotaError):
         client_bad.match(300)
+
+
+def test_coach_rejects_mismatched_public_account_on_hero_fallback():
+    import pytest
+
+    match = {
+        "match_id": 444, "duration": 30 * 60, "radiant_win": True,
+        "players": [
+            {"player_slot": 0, "hero_id": 8, "account_id": 99999, "kills": 5, "deaths": 2, "assists": 4, "gold_per_min": 550, "xp_per_min": 600, "last_hits": 200},
+            {"player_slot": 1, "hero_id": 86, "account_id": None, "kills": 1, "deaths": 4, "assists": 10, "gold_per_min": 300, "xp_per_min": 400, "last_hits": 40},
+        ],
+    }
+    with pytest.raises(ValueError, match="different public account"):
+        build_report(match, account_id=12345, hero_id=8)
+    # Private profile (account_id=None) still falls back to hero_id cleanly.
+    rep = build_report(match, account_id=12345, hero_id=86)
+    assert rep["hero"] == "Rubick"
