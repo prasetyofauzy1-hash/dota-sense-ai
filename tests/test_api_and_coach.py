@@ -61,3 +61,34 @@ def test_request_error_hides_api_key():
         OpenDotaClient(api_key="SECRETKEY", offline=False, http=Boom()).match(1)
     except OpenDotaError as exc:
         assert "SECRETKEY" not in str(exc)
+
+
+def test_connect_creates_missing_parent_dir_and_enables_wal(tmp_path):
+    from app.database.connection import connect
+
+    db_file = tmp_path / "nested" / "dir" / "dotasense.db"
+    conn = connect(db_file)
+    try:
+        assert db_file.exists()
+        mode = conn.execute("PRAGMA journal_mode;").fetchone()[0]
+        assert str(mode).lower() == "wal"
+    finally:
+        conn.close()
+
+
+def test_dashboard_renders_and_validates_account_id():
+    from pathlib import Path
+
+    from streamlit.testing.v1 import AppTest
+
+    dashboard_path = Path(__file__).resolve().parent.parent / "app" / "dashboard.py"
+    at = AppTest.from_file(dashboard_path, default_timeout=20)
+    at.run()
+    assert not at.exception
+    assert not at.error
+
+    at.text_input[0].set_value("9104260611")
+    at.text_input[1].set_value("not-a-number")
+    at.button[0].click().run()
+    assert not at.exception
+    assert any("numeric Steam32 account ID" in e.value for e in at.error)
