@@ -23,10 +23,12 @@ from pathlib import Path
 os.environ.setdefault("DOTASENSE_DESKTOP", "1")
 
 from app.config import FROZEN, ROOT_DIR, gsi_token, settings  # noqa: E402
+from app.updater import Updater, installed_version  # noqa: E402
 
 log = logging.getLogger("dotasense.desktop")
 UI_PORT = int(os.getenv("DOTASENSE_UI_PORT", "47691"))
 _window: subprocess.Popen | None = None
+updates: Updater | None = None
 
 
 def request_quit(code: int = 0) -> None:
@@ -147,6 +149,7 @@ def _run_streamlit(port: int) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
+    global updates
     parser = argparse.ArgumentParser(prog="DotaSenseAI")
     parser.add_argument("--no-window", action="store_true", help="serve only, do not open the app window")
     args = parser.parse_args(argv)
@@ -164,6 +167,14 @@ def main(argv: list[str] | None = None) -> None:
         _alert(f"Port {settings.gsi_port} is used by another program, so Dota 2 cannot reach DotaSense AI.\n"
                f"Close that program or set DOTASENSE_GSI_PORT. Log: {log_path}")
         sys.exit(1)
+
+    if FROZEN and sys.platform == "win32":
+        executable = Path(sys.executable)
+        if version := installed_version(executable):
+            updates = Updater(version, executable.parent, settings.data_dir / "updates")
+            updates.cleanup()
+            if not settings.offline:
+                updates.start_check()
 
     ui_port = UI_PORT if _port_free(UI_PORT) else _free_port()
     url = f"http://127.0.0.1:{ui_port}"

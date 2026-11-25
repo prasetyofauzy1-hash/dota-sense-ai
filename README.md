@@ -23,6 +23,12 @@ post-match coaching, with every recommendation explained.
 5. Restart Dota 2 and play a match (or Demo Hero). The sidebar shows **Live GSI: Receiving**.
    Enemy heroes are not in GSI data: pick them in the "Enemy heroes" box on the Live Match tab as you see them on the scoreboard.
 
+**Updates:** Install the latest release once if your current version predates the updater.
+The installed app checks GitHub Releases at startup without a token. When a new release
+is available, select **Update and restart** to download and verify the installer, apply it,
+and reopen DotaSense AI. The database and Dota 2 setup stay in place. Use **App updates**
+to see the installed version or check again; offline mode disables update checks.
+
 Data (database, GSI token, log `dotasense.log`) lives in `%LOCALAPPDATA%\DotaSenseAI`.
 The app listens on `127.0.0.1:47690` for Dota 2 (this PC only); every push must carry the
 token written into the config file. Uninstall from **Settings → Apps**; delete the `.cfg` file
