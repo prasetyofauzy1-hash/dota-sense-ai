@@ -100,6 +100,8 @@ def test_owned_components_reduce_gold_needed():
                        "items": {"slot0": {"name": "item_boots"}}})
     treads = next(r for r in item_recommender.recommend_items(state, [], limit=20) if r.item == "power_treads")
     assert treads.remaining_gold == -(1400 - 500)
+    assert treads.upgrade_cost == 900
+    assert treads.owned_components == ["Boots of Speed"]
 
 
 def test_nested_components_and_spike_tip_use_gold_needed():
@@ -112,3 +114,51 @@ def test_nested_components_and_spike_tip_use_gold_needed():
     recs = [r for r in item_recommender.recommend_items(state, [], limit=20) if r.item == "power_treads"]
     tips = [s.text for s in decision_engine.suggest(state, [], recs) if s.category == "power_spike"]
     assert tips and "260 gold away" in tips[0]
+
+
+def test_laning_phase_prioritizes_laning_core_over_expensive_counters():
+    state = MockProvider(scenario="01_laning_juggernaut").current_state()
+    threats = counter_analyzer.analyze_threats(state.enemy_heroes)
+    recs = item_recommender.recommend_items(state, threats)
+    top_two = {r.item for r in recs[:2]}
+    assert "power_treads" in top_two and "wraith_band" in top_two
+    assert all(r.item not in {"eternal_shroud", "ghost", "heavens_halberd"} for r in recs)
+
+
+def test_midgame_carry_avoids_tank_caster_and_duplicate_farming_items():
+    state = MockProvider(scenario="02_midgame_juggernaut").current_state()
+    threats = counter_analyzer.analyze_threats(state.enemy_heroes)
+    recs = item_recommender.recommend_items(state, threats)
+    items = [r.item for r in recs]
+    assert items[0] == "black_king_bar"
+    assert "ghost" not in items
+    assert "eternal_shroud" not in items
+    assert "maelstrom" not in items
+
+
+def test_late_lina_avoids_crimson_guard_and_melee_alternatives():
+    state = MockProvider(scenario="03_late_lina").current_state()
+    threats = counter_analyzer.analyze_threats(state.enemy_heroes)
+    recs = item_recommender.recommend_items(state, threats)
+    items = [r.item for r in recs]
+    assert "crimson_guard" not in items
+    assert all(r.alternative not in {"bfury", "abyssal_blade"} for r in recs)
+
+
+def test_benefits_are_specific_and_popularity_hides_zero_percent():
+    state = MockProvider(scenario="03_late_lina").current_state()
+    pop = {"late_game_items": {"110": 1, "96": 1000}}  # refresher share ~0.1% -> would round to 0%
+    recs = item_recommender.recommend_items(state, [], popularity=pop)
+    refresher = next(r for r in recs if r.item == "refresher")
+    assert "0%" not in refresher.reason
+    assert "Completes your core build" not in refresher.benefit
+    assert "(int)" not in refresher.reason and "Intelligence" in refresher.reason
+
+
+def test_invisibility_lineup_shows_at_most_one_detection_item():
+    state = MockProvider(scenario="01_laning_juggernaut").current_state()
+    state.enemy_heroes = ["riki", "bounty_hunter", "clinkz"]
+    threats = counter_analyzer.analyze_threats(state.enemy_heroes)
+    recs = item_recommender.recommend_items(state, threats)
+    detection = [r.item for r in recs if r.item in {"dust", "ward_sentry", "gem"}]
+    assert detection == ["dust"]
