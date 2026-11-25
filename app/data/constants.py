@@ -94,7 +94,7 @@ THREAT_LABELS = {
 CURATED_HERO_THREATS: dict[str, list[str]] = {
     "lion": ["area_disable", "targeted_disable", "magic_burst"],
     "lina": ["magic_burst", "area_disable"],
-    "zuus": ["magic_burst", "targeted_disable", "area_disable"],
+    "zuus": ["magic_burst", "targeted_disable"],
     "skywrath_mage": ["magic_burst", "dispellable", "targeted_disable"],
     "leshrac": ["magic_burst", "area_disable", "push"],
     "tinker": ["magic_burst"],
@@ -134,7 +134,7 @@ CURATED_HERO_THREATS: dict[str, list[str]] = {
     "furion": ["push", "mobility"],
     "lycan": ["summons", "push"],
     "necrolyte": ["healing", "magic_burst", "targeted_disable", "dispellable_save"],
-    "huskar": ["healing", "physical_burst", "passive", "area_disable"],
+    "huskar": ["healing", "physical_burst", "passive"],
     "alchemist": ["healing", "disable", "targeted_disable"],
     "morphling": ["physical_burst", "mobility", "targeted_disable"],
     "dazzle": ["healing"],

@@ -128,7 +128,7 @@ def test_disable_counters_match_how_the_spell_works():
 
 
 @pytest.mark.parametrize("hero", [
-    "magnataur", "death_prophet", "huskar", "medusa", "monkey_king", "riki", "slark", "zuus",
+    "magnataur", "death_prophet", "medusa", "monkey_king", "riki", "slark",
 ])
 def test_curated_non_piercing_area_control_suggests_bkb(hero):
     threats = counter_analyzer.analyze_threats([hero])
@@ -138,6 +138,14 @@ def test_curated_non_piercing_area_control_suggests_bkb(hero):
     if hero == "magnataur":
         assert "area_piercing_disable" in threats[0].tags
         assert "does not prevent piercing lockdown" in counter.explanation
+
+
+@pytest.mark.parametrize("hero", ["huskar", "zuus"])
+def test_curated_threat_does_not_claim_unsupported_area_control(hero):
+    threats = counter_analyzer.analyze_threats([hero])
+    assert "area_disable" not in threats[0].tags
+    assert all(C.THREAT_LABELS["area_disable"] not in counter.counters
+               for counter in counter_analyzer.counter_items(threats))
 
 
 @pytest.mark.parametrize(("hero", "targeted"), [
