@@ -72,6 +72,7 @@ THREAT_LABELS = {
     "evasion": "Evasion",
     "illusions": "Illusions",
     "summons": "Summons / controlled units",
+    "magic_immune_wards": "Magic-immune Serpent Wards",
     "clones": "Linked hero clones",
     "healing": "Strong healing / regen",
     "passive": "Strong passive abilities",
@@ -101,7 +102,7 @@ CURATED_HERO_THREATS: dict[str, list[str]] = {
     "death_prophet": ["dispellable", "push", "healing"],
     "doom_bringer": ["targeted_disable", "piercing_disable"],
     "bane": ["targeted_disable", "piercing_disable"],
-    "shadow_shaman": ["disable", "targeted_disable", "summons", "push"],
+    "shadow_shaman": ["disable", "targeted_disable", "magic_immune_wards", "push"],
     "faceless_void": ["piercing_disable", "physical_burst", "mobility"],
     "enigma": ["piercing_disable", "summons", "push"],
     "magnataur": ["disable"],
@@ -166,7 +167,7 @@ ROLE_THREATS = {
 # Cover distinct mechanics before showing more options for the same threat.
 COUNTER_FOCUS = (
     "invisibility", "evasion", "passive", "piercing_disable", "targeted_disable",
-    "healing", "mana_shield", "dispellable_save", "clones", "illusions", "summons",
+    "healing", "mana_shield", "dispellable_save", "clones", "illusions", "summons", "magic_immune_wards",
     "dispellable",
 )
 
@@ -218,6 +219,10 @@ COUNTER_ITEMS: dict[str, list[tuple[str, str, bool]]] = {
     ],
     "summons": [
         ("crimson_guard", "Team damage block helps against many small physical hits from controlled units.", True),
+        ("mjollnir", "Chain Lightning helps clear non-magic-immune summons, not Serpent Wards.", False),
+    ],
+    "magic_immune_wards": [
+        ("crimson_guard", "Team damage block helps allies withstand Serpent Ward attacks.", True),
     ],
     "clones": [
         ("shivas_guard", "Area slow helps keep Meepo clones grouped; focus one exposed clone rather than splitting damage.", True),

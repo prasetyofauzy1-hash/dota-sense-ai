@@ -79,6 +79,13 @@ def test_serpent_ward_counter_does_not_suggest_chain_lightning():
     assert "crimson_guard" in counters and "mjollnir" not in counters
 
 
+def test_chain_lightning_is_a_counter_only_for_magic_vulnerable_summons():
+    threats = counter_analyzer.analyze_threats(["shadow_shaman", "broodmother", "enigma", "chen"])
+    mjollnir = next(c for c in counter_analyzer.counter_items(threats) if c.item == "mjollnir")
+    assert set(mjollnir.against_heroes) == {"Broodmother", "Enigma", "Chen"}
+    assert "not Serpent Wards" in mjollnir.explanation
+
+
 def test_bloodthorn_counter_explains_whose_attacks_cannot_miss():
     threats = counter_analyzer.analyze_threats(["phantom_assassin"])
     bloodthorn = next(c for c in counter_analyzer.counter_items(threats) if c.item == "bloodthorn")
