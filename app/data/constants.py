@@ -6,6 +6,7 @@ They are labeled as such wherever they are shown.
 """
 from __future__ import annotations
 
+from collections.abc import Collection
 from functools import lru_cache
 
 from app.data.opendota import _load_snapshot
@@ -323,8 +324,10 @@ ALTERNATIVES = {
 }
 
 
-def alternatives(item: str) -> tuple[str, ...]:
+def alternatives(item: str, counter_tags: Collection[str] = ()) -> tuple[str, ...]:
     """Alternatives for an item, in order of preference."""
+    if item == "mjollnir" and "summons" in counter_tags:
+        return ("bfury", "maelstrom")
     alt = ALTERNATIVES.get(item)
     return (alt,) if isinstance(alt, str) else tuple(alt or ())
 

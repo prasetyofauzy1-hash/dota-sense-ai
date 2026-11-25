@@ -86,6 +86,14 @@ def test_chain_lightning_is_a_counter_only_for_magic_vulnerable_summons():
     assert "not Serpent Wards" in mjollnir.explanation
 
 
+def test_ranged_mjollnir_alternative_can_clear_summons():
+    state = MockProvider(scenario="03_late_lina").current_state()
+    threats = counter_analyzer.analyze_threats(["broodmother", "phantom_lancer"])
+    recs = item_recommender.recommend_items(state, threats, limit=20)
+    assert next(r for r in recs if r.item == "mjollnir").alternative == "maelstrom"
+    assert "gungir" in C.alternatives("mjollnir")
+
+
 def test_bloodthorn_counter_explains_whose_attacks_cannot_miss():
     threats = counter_analyzer.analyze_threats(["phantom_assassin"])
     bloodthorn = next(c for c in counter_analyzer.counter_items(threats) if c.item == "bloodthorn")

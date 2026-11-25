@@ -111,7 +111,7 @@ def recommend_items(state: GameState, threats: list[Threat], *, popularity: dict
             score += min(0.3, share * 3)
             reasons.append(f"{share:.0%} of recent {phase_key}-phase purchases on this hero (OpenDota)")
         cost = C.item_cost(item)
-        alt = next((a for a in C.alternatives(item)
+        alt = next((a for a in C.alternatives(item, c["counters"])
                     if a in C.items() and not _owned_or_upgraded(a, owned) and _fit_weight(a, hero) > 0), None)
         needed = _gold_needed(item, state.items)
         counter_hits = sum(len(h) for h in c["counters"].values())
