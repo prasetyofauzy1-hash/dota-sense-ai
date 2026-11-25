@@ -123,7 +123,7 @@ with tab_live:
                 "Level": a.level,
                 "Cooldown": "Ready" if not a.cooldown else f"{a.cooldown:.0f}s",
                 "Ultimate": "★" if a.ultimate else "",
-            } for a in state.abilities]), hide_index=True, use_container_width=True)
+            } for a in state.abilities]), hide_index=True, width="stretch")
         else:
             st.markdown(MISSING, unsafe_allow_html=True)
     with right:
@@ -204,6 +204,8 @@ with tab_post:
         hero_id = C.heroes_by_name()[hero_pick]["id"] if hero_pick != "—" else None
         if not match_id.strip().isdigit():
             st.error("Enter a numeric match ID.")
+        elif account_id.strip() and not account_id.strip().isdigit():
+            st.error("Enter a numeric Steam32 account ID.")
         elif not account_id.strip() and hero_id is None:
             st.error("Enter your account ID or pick your hero.")
         else:
