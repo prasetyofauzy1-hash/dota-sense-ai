@@ -130,10 +130,12 @@ def _infer_role(match: dict, player: dict, hero: dict, minutes: float, is_turbo:
 
     has_laning_lh = all(isinstance(p.get("lh_t"), list) and len(p["lh_t"]) > 10 for p in teammates)
 
-    def _farm_score(p: dict) -> float:
+    def _farm_score(p: dict) -> tuple[float, ...]:
+        nw = float(p.get("net_worth") or p.get("gold_per_min") or 0)
+        wards = float((p.get("obs_placed") or 0) + (p.get("sen_placed") or 0))
         if has_laning_lh:
-            return float(p["lh_t"][10] or 0)
-        return float(p.get("net_worth") or p.get("gold_per_min") or 0)
+            return (float(p["lh_t"][10] or 0), nw, -wards)
+        return (nw, -wards)
 
     ranked = sorted(teammates, key=_farm_score, reverse=True)
     rank = next((idx + 1 for idx, p in enumerate(ranked) if p is player), len(ranked))
