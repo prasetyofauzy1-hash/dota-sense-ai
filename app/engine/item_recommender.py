@@ -36,16 +36,21 @@ def _owned_or_upgraded(item: str, owned: set[str]) -> bool:
 
 
 def _gold_needed(item: str, inventory: list[str]) -> int | None:
-    """Item cost minus the components already in the inventory."""
-    cost = C.item_cost(item)
-    if cost is None:
+    """Gold still needed for an item, counting (nested) components already in the inventory."""
+    if C.item_cost(item) is None:
         return None
     spare = list(inventory)
-    for comp in C.items()[item].get("components") or []:
-        if comp in spare:
-            spare.remove(comp)
-            cost -= C.item_cost(comp) or 0
-    return max(cost, 0)
+
+    def needed(key: str, top: bool = False) -> int:
+        if not top and key in spare:
+            spare.remove(key)
+            return 0
+        cost = C.item_cost(key) or 0
+        components = [c for c in C.items().get(key, {}).get("components") or [] if c]
+        recipe = cost - sum(C.item_cost(c) or 0 for c in components)
+        return max(recipe, 0) + sum(needed(c) for c in components) if components else cost
+
+    return needed(item, top=True)
 
 
 def _popularity_share(popularity: dict | None, phase_key: str, item: str) -> float | None:

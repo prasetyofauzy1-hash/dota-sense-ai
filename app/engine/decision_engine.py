@@ -37,9 +37,9 @@ def suggest(state: GameState, threats: list[Threat], recs: list[ItemRecommendati
         follow = "Heal up first, then look for a fight." if low_hp else "Consider fighting right after."
         out.append(Suggestion(category="power_spike", confidence="high",
                               text=f"You can buy {r.item_name} now — a power spike. {follow}",
-                              reasons=[f"gold {state.gold} ≥ cost {r.cost}"]))
-    elif recs and state.gold is not None and recs[0].cost:
-        gap = recs[0].cost - state.gold
+                              reasons=[f"gold {state.gold} covers what is left to buy ({r.cost} total)"]))
+    elif recs and recs[0].remaining_gold is not None:
+        gap = -recs[0].remaining_gold
         if 0 < gap <= 800:
             out.append(Suggestion(category="power_spike", confidence="medium",
                                   text=f"{gap} gold away from {recs[0].item_name}: farm a little before committing.",

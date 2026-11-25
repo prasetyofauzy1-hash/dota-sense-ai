@@ -71,8 +71,11 @@ class OpenDotaClient:
         path = f"/matches/{int(match_id)}"
         data = self._get(path, max_age=7 * 24 * 3600)
         if not any(p.get("purchase_log") for p in data.get("players", [])):
-            # Unparsed matches may get parsed later; keep them cached for one hour only.
-            data = self._get(path, max_age=3600)
+            # Unparsed matches may get parsed later: refetch after an hour, keep the cached copy if that fails.
+            try:
+                data = self._get(path, max_age=3600)
+            except OpenDotaError:
+                pass
         return data
 
 
