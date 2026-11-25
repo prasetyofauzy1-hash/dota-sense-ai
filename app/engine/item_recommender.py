@@ -94,8 +94,11 @@ def _popularity_share(popularity: dict | None, phase_key: str, item: str) -> flo
     return bucket.get(str(item_id), 0) / total
 
 
-def _pick_alternative(item: str, counters: dict[str, list[str]], owned: set[str], hero: dict) -> str | None:
+def _pick_alternative(item: str, counters: dict[str, list[str]], owned: set[str], hero: dict, *,
+                      targeted_lockdown: bool) -> str | None:
     def valid(a: str) -> bool:
+        if item == "black_king_bar" and a == "sphere" and not targeted_lockdown:
+            return False
         return a != item and a in C.items() and not _owned_or_upgraded(a, owned) and _fit_weight(a, hero) >= 0.5
 
     alts = C.alternatives(item, counters)
@@ -123,6 +126,7 @@ def recommend_items(state: GameState, threats: list[Threat], *, popularity: dict
     attr = hero.get("primary_attr") or "all"
     attr_label = C.ATTR_LABELS.get(attr, attr)
     build = C.CORE_BUILD.get(attr, C.CORE_BUILD["all"])
+    targeted_lockdown = any("targeted_disable" in threat.tags for threat in threats)
 
     candidates: dict[str, dict] = {}
 
@@ -172,7 +176,7 @@ def recommend_items(state: GameState, threats: list[Threat], *, popularity: dict
             if share >= 0.01:
                 reasons.append(f"{share:.0%} of recent {phase_key}-phase purchases on this hero (OpenDota)")
         cost = C.item_cost(item)
-        alt = _pick_alternative(item, c["counters"], owned, hero)
+        alt = _pick_alternative(item, c["counters"], owned, hero, targeted_lockdown=targeted_lockdown)
         needed, owned_comps = _gold_needed_with_components(item, state.items)
         counter_hits = sum(len(h) for h in c["counters"].values())
         if phase_key == "laning":

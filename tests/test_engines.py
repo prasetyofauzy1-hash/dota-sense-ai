@@ -323,6 +323,18 @@ def test_counter_alternatives_also_counter_the_threat():
     assert by_item["manta"].alternative in {"black_king_bar", "cyclone"}
 
 
+def test_linkens_alternative_to_bkb_requires_targeted_lockdown():
+    state = _state()
+
+    def bkb_alternative(enemy):
+        threats = counter_analyzer.analyze_threats([enemy])
+        recs = item_recommender.recommend_items(state, threats, limit=20)
+        return next(r.alternative for r in recs if r.item == "black_king_bar")
+
+    assert bkb_alternative("meepo") != "sphere"
+    assert bkb_alternative("sven") == "sphere"
+
+
 def test_power_treads_still_allows_boots_of_travel_vs_pushers():
     state = MockProvider(scenario="02_midgame_juggernaut").current_state()
     state.enemy_heroes = ["furion", "naga_siren", "lycan"]
