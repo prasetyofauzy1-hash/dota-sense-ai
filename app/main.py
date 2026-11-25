@@ -74,12 +74,20 @@ def analysis(scenario: str | None = None, history: bool = True,
 def coach(match_id: int, account_id: int | None = Query(None), hero_id: int | None = Query(None)) -> dict:
     from app.engine.coach import coach_match
 
+    if account_id is None and hero_id is None:
+        raise HTTPException(400, "Provide either account_id or hero_id.")
     try:
         report = coach_match(client, match_id, account_id=account_id, hero_id=hero_id)
     except OpenDotaError as exc:
+        if exc.status_code == 404:
+            raise HTTPException(404, str(exc)) from exc
+        if exc.status_code == 429:
+            raise HTTPException(429, str(exc)) from exc
+        if exc.timed_out:
+            raise HTTPException(504, str(exc)) from exc
         raise HTTPException(502, str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(404, str(exc)) from exc
+        raise HTTPException(400 if "valid" in str(exc).lower() or "positive" in str(exc).lower() else 404, str(exc)) from exc
     db.save_report(conn, report)
     return report
 

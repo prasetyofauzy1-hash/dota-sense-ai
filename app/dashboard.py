@@ -12,10 +12,10 @@ import streamlit as st  # noqa: E402
 
 from app.config import settings  # noqa: E402
 from app.data import constants as C  # noqa: E402
-from app.data.opendota import OpenDotaClient, OpenDotaError, snapshot_meta  # noqa: E402
+from app.data.opendota import OpenDotaClient, OpenDotaError, parse_match_id, snapshot_meta  # noqa: E402
 from app.database import models as db  # noqa: E402
 from app.database.connection import connect  # noqa: E402
-from app.engine.coach import coach_match  # noqa: E402
+from app.engine.coach import coach_match, parse_account_id  # noqa: E402
 from app.gsi import dota_cfg  # noqa: E402
 from app.gsi.provider import LiveGSIProvider, MockProvider  # noqa: E402
 from app.services import analyze  # noqa: E402
@@ -174,7 +174,7 @@ with tab_live:
                 "Level": a.level,
                 "Cooldown": "Ready" if not a.cooldown else f"{a.cooldown:.0f}s",
                 "Ultimate": "★" if a.ultimate else "",
-            } for a in state.abilities]), hide_index=True, use_container_width=True)
+            } for a in state.abilities]), hide_index=True, width="stretch")
         else:
             st.markdown(MISSING, unsafe_allow_html=True)
     with right:
@@ -190,22 +190,32 @@ with tab_live:
 
     # 4. Recommended Items
     st.subheader("4 · Recommended Items")
+    if not state.enemy_heroes:
+        st.caption("Showing core build only — add enemy heroes in the sidebar for counter-item recommendations.")
     if not result["recommendations"]:
         st.markdown(MISSING + " — hero unknown", unsafe_allow_html=True)
     for r in result["recommendations"]:
         high = r.priority.value == "high"
         badge = "<span class='ds-badge ds-b-high'>HIGH PRIORITY</span>" if high else \
             "<span class='ds-badge ds-b-sit'>SITUATIONAL</span>"
+        buy_badge = "<span class='ds-badge ds-b-ok'>BUY NOW</span>" if r.affordable else ""
+        if r.cost is None:
+            cost_txt = MISSING
+        elif r.owned_components and r.upgrade_cost is not None:
+            cost_txt = (f"{r.cost:,} gold · {r.upgrade_cost:,} gold to finish "
+                        f"(have {', '.join(r.owned_components)})")
+        else:
+            cost_txt = f"{r.cost:,} gold"
         if r.affordable:
-            gold_txt = f"Affordable now · {r.remaining_gold} gold left after buying"
+            gold_txt = f"Affordable now · {r.remaining_gold:,} gold left after buying"
         elif r.remaining_gold is not None:
-            gold_txt = f"Need {-r.remaining_gold} more gold"
+            gold_txt = f"Need {-r.remaining_gold:,} more gold"
         else:
             gold_txt = "Gold not available"
         alt = f"<br><b>Alternative:</b> {r.alternative_name}" if r.alternative_name else ""
         st.markdown(
-            f"<div class='ds-card {'ds-high' if high else 'ds-sit'}'>{badge}<b>{r.item_name}</b> "
-            f"<small>({val(r.cost)} gold)</small><br><b>Why:</b> {r.reason}<br>"
+            f"<div class='ds-card {'ds-high' if high else 'ds-sit'}'>{badge}{buy_badge}<b>{r.item_name}</b> "
+            f"<small>({cost_txt})</small><br><b>Why:</b> {r.reason}<br>"
             f"<b>Benefit:</b> {r.benefit}{alt}<br><small>{gold_txt} · score {r.score}</small></div>",
             unsafe_allow_html=True)
     st.caption("History-backed" if result["used_history"] else "Rules only (no historical data used)")
@@ -247,39 +257,90 @@ with tab_post:
     st.caption("Fetches a real public match from OpenDota. Match details must be public on your Dota 2 profile.")
     with st.form("coach"):
         m1, m2 = st.columns(2)
-        match_id = m1.text_input("Match ID")
-        account_id = m2.text_input("Your Steam32 account ID (optional if you pick a hero)")
-        hero_pick = st.selectbox("…or your hero in that match", ["—"] + hero_options, format_func=lambda h: h if h == "—" else C.hero_display(h))
+        match_id = m1.text_input("Match ID or OpenDota/Dotabuff URL", placeholder="e.g. 9104260611")
+        account_id = m2.text_input("Your Steam32 or Steam64 ID (optional if you pick a hero)", placeholder="e.g. 123456789")
+        h1, h2 = st.columns([3, 1])
+        hero_pick = h1.selectbox("…or your hero in that match", ["—"] + hero_options,
+                                 format_func=lambda h: h if h == "—" else C.hero_display(h))
+        force_refresh = h2.checkbox("Force refresh", help="Bypass cache (useful after requesting a parse on OpenDota)")
         submitted = st.form_submit_button("Analyse match")
     if submitted:
         hero_id = C.heroes_by_name()[hero_pick]["id"] if hero_pick != "—" else None
-        if not match_id.strip().isdigit():
-            st.error("Enter a numeric match ID.")
-        elif not account_id.strip() and hero_id is None:
-            st.error("Enter your account ID or pick your hero.")
+        try:
+            parsed_mid = parse_match_id(match_id)
+            parsed_acc = parse_account_id(account_id)
+        except ValueError as exc:
+            st.error(str(exc))
         else:
-            try:
-                report = coach_match(client, int(match_id), account_id=int(account_id) if account_id.strip() else None,
-                                     hero_id=hero_id)
-                db.save_report(conn, report)
-                st.success(f"Report saved for match {report['match_id']}")
-            except (OpenDotaError, ValueError) as exc:
-                st.error(str(exc))
-    for rep in db.list_reports(conn):
-        with st.expander(f"Match {rep['match_id']} · {rep['hero']} · {rep['result']} · {rep['duration_min']} min"):
-            c = st.columns(4)
-            c[0].metric("K/D/A", rep["kda"])
-            c[1].metric("GPM", rep["gpm"])
-            c[2].metric("XPM", rep["xpm"])
-            c[3].metric("Last hits", rep["last_hits"])
-            st.markdown("**Final items:** " + (", ".join(rep["final_items"]) or "n/a"))
-            if rep["item_timings"]:
-                st.dataframe(pd.DataFrame(rep["item_timings"])[["item_name", "minute", "cost"]], hide_index=True)
+            if parsed_acc is None and hero_id is None:
+                st.error("Enter your account ID or pick your hero.")
             else:
-                st.markdown(MISSING + " (item timings need a parsed match)", unsafe_allow_html=True)
-            if rep["benchmarks_pct"]:
-                st.markdown("**Percentile vs players on this hero (OpenDota benchmarks):** " +
-                            ", ".join(f"{k.replace('_', ' ')} {v}%" for k, v in rep["benchmarks_pct"].items()))
-            st.markdown("**Suggestions**")
-            for s in rep["suggestions"]:
+                try:
+                    with st.spinner("Fetching match from OpenDota…"):
+                        report = coach_match(
+                            client, parsed_mid, account_id=parsed_acc,
+                            hero_id=hero_id, force_refresh=force_refresh,
+                        )
+                    db.save_report(conn, report)
+                    st.success(f"Report saved for match {report['match_id']} ({report['hero']})")
+                except (OpenDotaError, ValueError) as exc:
+                    st.error(str(exc))
+
+    saved_reports = db.list_reports(conn)
+    if not saved_reports:
+        st.caption("No reports yet. Enter a recent public match ID above to generate your first post-match review.")
+    for idx, rep in enumerate(saved_reports):
+        role_tag = f" ({rep['role']})" if rep.get("role") else ""
+        mode_tag = f" · {rep['game_mode']}" if rep.get("game_mode") else ""
+        parse_tag = "Parsed" if rep.get("parsed") else "Unparsed"
+        header = (
+            f"Match {rep['match_id']} · {rep['hero']}{role_tag} · "
+            f"{rep['result']} · {rep['duration_min']} min{mode_tag} · {parse_tag}"
+        )
+        with st.expander(header, expanded=(idx == 0)):
+            r1 = st.columns(4)
+            r1[0].metric("K / D / A", rep["kda"])
+            r1[1].metric("GPM", rep.get("gpm", "—"))
+            r1[2].metric("XPM", rep.get("xpm", "—"))
+            r1[3].metric("Last hits", rep.get("last_hits", "—"))
+            r2 = st.columns(4)
+            r2[0].metric("Kill part.", f"{rep['kill_participation_pct']}%" if rep.get("kill_participation_pct") is not None else "—")
+            r2[1].metric("Hero damage", f"{rep['hero_damage']:,}" if rep.get("hero_damage") is not None else "—")
+            r2[2].metric("Tower damage", f"{rep['tower_damage']:,}" if rep.get("tower_damage") is not None else "—")
+            wards = rep.get("wards")
+            r2[3].metric("Wards (Obs/Sen)", f"{wards['obs']} / {wards['sen']}" if wards is not None else "n/a")
+
+            items_line = ", ".join(rep.get("final_items") or []) or "n/a"
+            extras = []
+            if rep.get("neutral_item"):
+                extras.append(f"Neutral: {rep['neutral_item']}")
+            if rep.get("consumed_buffs"):
+                extras.append("Buffs: " + ", ".join(rep["consumed_buffs"]))
+            st.markdown("**Final items:** " + items_line + (f" · {' · '.join(extras)}" if extras else ""))
+
+            if rep.get("item_timings"):
+                df_timings = pd.DataFrame(rep["item_timings"])[["item_name", "minute", "cost"]].rename(
+                    columns={"item_name": "Item", "minute": "Minute", "cost": "Cost (gold)"}
+                )
+                st.dataframe(df_timings, hide_index=True, use_container_width=True)
+            elif rep.get("parsed"):
+                st.caption("No major completed items recorded in this parsed match.")
+            else:
+                req_url = rep.get("parse_request_url") or f"https://www.opendota.com/request#{rep['match_id']}"
+                st.markdown(
+                    f"{MISSING} — match is not parsed on OpenDota "
+                    f"(<a href='{req_url}' target='_blank'>request a parse</a>, then re-run with Force refresh).",
+                    unsafe_allow_html=True,
+                )
+
+            if rep.get("benchmarks_pct"):
+                st.markdown(
+                    "**Benchmarks vs players on this hero** *(higher % = better, including fewer deaths)*: "
+                    + " · ".join(f"{k.replace('_', ' ')} **{v}%**" for k, v in rep["benchmarks_pct"].items())
+                )
+
+            st.markdown("**Coaching suggestions**")
+            for s in rep.get("suggestions") or []:
                 st.markdown(f"- {s}")
+            od_url = rep.get("opendota_url") or f"https://www.opendota.com/matches/{rep['match_id']}"
+            st.caption(f"Source: {rep.get('source', 'OpenDota')} · [View full match on OpenDota]({od_url})")

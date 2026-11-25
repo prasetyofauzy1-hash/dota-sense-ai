@@ -53,14 +53,21 @@ Requires Python 3.11+.
 ```bash
 git clone https://github.com/prasetyofauzy1-hash/dota-sense-ai.git
 cd dota-sense-ai
+
+# Create & activate a virtualenv (use `py -3.11` on Windows or `python3` on macOS/Linux if `python` is older)
 python -m venv .venv
-# Windows: .venv\Scripts\activate     macOS/Linux: source .venv/bin/activate
+# Windows (PowerShell): .venv\Scripts\Activate.ps1
+# Windows (CMD):        .venv\Scripts\activate.bat
+# macOS / Linux:        source .venv/bin/activate
+
 pip install -r requirements.txt
 
 streamlit run app/dashboard.py          # dashboard  -> http://localhost:8501
-uvicorn app.main:app --reload           # optional API -> http://localhost:8000/docs
+uvicorn app.main:app --reload           # optional API (separate terminal) -> http://localhost:8000/docs
 pytest -q                               # tests (run offline)
 ```
+
+> **Windows PowerShell note:** If script execution is restricted when activating `.venv`, run commands directly without activating: `.venv\Scripts\python -m pip install -r requirements.txt` and `.venv\Scripts\streamlit run app/dashboard.py`. Set optional environment variables with `$env:DOTASENSE_OFFLINE="true"`.
 
 Optional environment variables:
 
