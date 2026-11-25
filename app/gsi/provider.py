@@ -1,7 +1,9 @@
-"""Game-state providers. Only the mock provider is active in this version."""
+"""Game-state providers: live Dota 2 GSI and hand-written MOCK scenarios."""
 from __future__ import annotations
 
 import json
+import os
+import time
 from pathlib import Path
 from typing import Protocol
 
@@ -45,23 +47,50 @@ class MockProvider:
 
 
 class LiveGSIProvider:
-    """Holds the latest payload pushed to the GSI receiver. Disabled unless
-    DOTASENSE_LIVE_GSI=true, pending a policy review (see README)."""
+    """Latest payload pushed by the Dota 2 client to the GSI receiver.
 
-    def __init__(self) -> None:
-        self._latest: dict | None = None
+    The payload is kept in a JSON file in the data folder so the API process and the
+    dashboard (which may run separately) see the same live state.
+    """
+
+    def __init__(self, path: Path | None = None) -> None:
+        self.path = path or settings.live_state_path
 
     def push(self, payload: dict) -> None:
-        self._latest = payload
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {k: v for k, v in payload.items() if k not in {"auth", "previously", "added"}}
+        tmp = self.path.with_suffix(f".{os.getpid()}.tmp")
+        tmp.write_text(json.dumps({"received_at": time.time(), "payload": payload}), encoding="utf-8")
+        os.replace(tmp, self.path)
+
+    def _read(self) -> tuple[dict | None, float | None]:
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+            return data.get("payload"), data.get("received_at")
+        except (OSError, ValueError):
+            return None, None
+
+    def received_at(self) -> float | None:
+        return self._read()[1]
+
+    def age_seconds(self) -> float | None:
+        received_at = self.received_at()
+        return None if received_at is None else max(0.0, time.time() - received_at)
 
     def current_state(self) -> GameState:
-        if not settings.live_integration_enabled or self._latest is None:
+        payload, received_at = self._read()
+        stale = received_at is None or time.time() - received_at > settings.gsi_stale_seconds
+        if not settings.live_integration_enabled or payload is None or stale:
             return GameState(source=DataSource.NONE, missing_fields=["live_data"])
-        return parse_gsi(self._latest, source=DataSource.LIVE_GSI)
+        return parse_gsi(payload, source=DataSource.LIVE_GSI)
 
     def status(self) -> dict:
+        base = {"source": DataSource.LIVE_GSI.value, "is_mock": False}
         if not settings.live_integration_enabled:
-            return {"source": DataSource.LIVE_GSI.value, "connected": False, "is_mock": False,
-                    "detail": "Live integration disabled pending Valve policy review"}
-        return {"source": DataSource.LIVE_GSI.value, "connected": self._latest is not None,
-                "is_mock": False, "detail": "Waiting for data" if self._latest is None else "Receiving"}
+            return {**base, "connected": False, "detail": "Live GSI turned off (DOTASENSE_LIVE_GSI=false)"}
+        age = self.age_seconds()
+        if age is None:
+            return {**base, "connected": False, "detail": "Waiting for Dota 2 (start a match or demo hero)"}
+        if age > settings.gsi_stale_seconds:
+            return {**base, "connected": False, "detail": f"No data for {int(age)} s (Dota 2 closed?)"}
+        return {**base, "connected": True, "detail": f"Receiving · last update {int(age)} s ago"}

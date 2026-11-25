@@ -50,8 +50,14 @@ def test_match_glance_distinguishes_mock_live_status_and_missing_lineup(monkeypa
     assert "Need 260 more gold" in treads
     assert "900 gold to finish (have Boots of Speed)" in treads
 
+    config.settings.live_state_path.unlink(missing_ok=True)  # no live push from other tests
     monkeypatch.setattr(config, "settings", replace(config.settings, live_integration_enabled=True))
     dashboard.run()
+    assert not dashboard.exception
+    status = next(block.value for block in dashboard.tabs[0].markdown if "ds-status'" in block.value)
+    assert "No match data" in status and "Live GSI: Waiting for game" in status
+
+    dashboard.radio[0].set_value("Mock scenario").run()
     assert not dashboard.exception
     status = next(block.value for block in dashboard.tabs[0].markdown if "ds-status'" in block.value)
     assert "MOCK DATA" in status and "Not a real match" in status
