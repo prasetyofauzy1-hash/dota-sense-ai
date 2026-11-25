@@ -86,6 +86,8 @@ class ItemRecommendation(BaseModel):
     item: str
     item_name: str
     cost: int | None
+    upgrade_cost: int | None = None
+    owned_components: list[str] = Field(default_factory=list)
     priority: Priority
     reason: str
     benefit: str
