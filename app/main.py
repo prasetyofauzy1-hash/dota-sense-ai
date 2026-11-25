@@ -1,7 +1,7 @@
 """FastAPI backend: `uvicorn app.main:app --reload`."""
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 
 from app.config import settings
 from app.data.opendota import OpenDotaClient, OpenDotaError
@@ -23,6 +23,22 @@ def _provider():
     return receiver.live_provider if settings.live_integration_enabled else mock
 
 
+def _require_live_token(x_dotasense_token: str | None = Header(None)) -> None:
+    """Live match state is private: when live GSI is on, reading it needs DOTASENSE_GSI_TOKEN."""
+    if not settings.live_integration_enabled:
+        return
+    if not settings.gsi_auth_token:
+        raise HTTPException(503, "Set DOTASENSE_GSI_TOKEN to read live match state")
+    if x_dotasense_token != settings.gsi_auth_token:
+        raise HTTPException(401, "Invalid or missing X-DotaSense-Token header")
+
+
+def _mock_for(scenario: str) -> MockProvider:
+    if scenario not in mock.scenario_names():
+        raise HTTPException(404, "Unknown scenario")
+    return MockProvider(scenario=scenario)
+
+
 @app.get("/health")
 def health() -> dict:
     return {"ok": True, "live_integration_enabled": settings.live_integration_enabled,
@@ -35,17 +51,21 @@ def scenarios() -> list[str]:
 
 
 @app.get("/state")
-def state(scenario: str | None = None) -> dict:
+def state(scenario: str | None = None, x_dotasense_token: str | None = Header(None)) -> dict:
     if scenario:
-        if scenario not in mock.scenario_names():
-            raise HTTPException(404, "Unknown scenario")
-        return MockProvider(scenario=scenario).current_state().model_dump()
+        return _mock_for(scenario).current_state().model_dump()
+    _require_live_token(x_dotasense_token)
     return _provider().current_state().model_dump()
 
 
 @app.get("/analysis")
-def analysis(scenario: str | None = None, history: bool = True) -> dict:
-    provider = MockProvider(scenario=scenario) if scenario else _provider()
+def analysis(scenario: str | None = None, history: bool = True,
+             x_dotasense_token: str | None = Header(None)) -> dict:
+    if scenario:
+        provider = _mock_for(scenario)
+    else:
+        _require_live_token(x_dotasense_token)
+        provider = _provider()
     result = analyze(provider.current_state(), conn, client, use_history=history)
     return {k: (v.model_dump() if hasattr(v, "model_dump") else
                 [x.model_dump() if hasattr(x, "model_dump") else x for x in v] if isinstance(v, list) else v)
@@ -62,7 +82,7 @@ def coach(match_id: int, account_id: int | None = Query(None), hero_id: int | No
         raise HTTPException(502, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(404, str(exc)) from exc
-    db.save_report(conn, report["match_id"], report)
+    db.save_report(conn, report)
     return report
 
 

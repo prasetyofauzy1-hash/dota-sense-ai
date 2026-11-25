@@ -268,7 +268,7 @@ with tab_post:
             try:
                 report = coach_match(client, int(match_id), account_id=int(account_id) if account_id.strip() else None,
                                      hero_id=hero_id)
-                db.save_report(conn, report["match_id"], report)
+                db.save_report(conn, report)
                 st.success(f"Report saved for match {report['match_id']}")
             except (OpenDotaError, ValueError) as exc:
                 st.error(str(exc))

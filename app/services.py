@@ -28,14 +28,14 @@ def analyze(state: GameState, conn: sqlite3.Connection | None = None,
         notes.append("Historical data off; using rules only.")
 
     threats = counter_analyzer.analyze_threats(state.enemy_heroes, my_hero_id=hero_id, matchups=matchups)
-    counters = counter_analyzer.counter_items(threats, owned=state.items)
+    counters = counter_analyzer.counter_items(threats, owned=state.items, my_hero=state.hero.name)
     recs = item_recommender.recommend_items(state, threats, popularity=popularity)
     suggestions = decision_engine.suggest(state, threats, recs)
 
     if conn is not None:
-        sid = db.save_snapshot(conn, state.model_dump_json(), source=state.source.value, is_mock=state.is_mock,
-                               match_id=state.match_id, game_time=state.game_time)
-        db.log_recommendations(conn, sid, [(r.item, r.priority.value, r.score) for r in recs])
+        db.save_analysis(conn, state.model_dump_json(), [(r.item, r.priority.value, r.score) for r in recs],
+                         source=state.source.value, is_mock=state.is_mock,
+                         match_id=state.match_id, game_time=state.game_time)
 
     return {
         "state": state,

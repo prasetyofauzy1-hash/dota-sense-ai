@@ -49,7 +49,7 @@ class OpenDotaClient:
         try:
             resp = self.http.get(f"{self.base_url}{path}", params=params, timeout=self.timeout)
         except requests.RequestException as exc:
-            raise OpenDotaError(f"OpenDota request failed: {exc}") from exc
+            raise OpenDotaError(f"OpenDota request failed ({type(exc).__name__})") from exc
         if resp.status_code != 200:
             raise OpenDotaError(f"OpenDota {path} returned HTTP {resp.status_code}")
         data = resp.json()
@@ -68,7 +68,15 @@ class OpenDotaClient:
 
     def match(self, match_id: int | str) -> dict:
         """Full match details. Parsed fields (purchase_log) exist only for parsed matches."""
-        return self._get(f"/matches/{int(match_id)}", max_age=7 * 24 * 3600)
+        path = f"/matches/{int(match_id)}"
+        data = self._get(path, max_age=7 * 24 * 3600)
+        if not any(p.get("purchase_log") for p in data.get("players", [])):
+            # Unparsed matches may get parsed later: refetch after an hour, keep the cached copy if that fails.
+            try:
+                data = self._get(path, max_age=3600)
+            except OpenDotaError:
+                pass
+        return data
 
 
 @lru_cache(maxsize=None)

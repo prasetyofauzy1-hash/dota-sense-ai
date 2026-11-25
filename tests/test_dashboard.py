@@ -23,6 +23,8 @@ def test_match_glance_distinguishes_mock_live_status_and_missing_lineup(monkeypa
     assert "Top item recommendation" in glance and "Black King Bar" in glance
     assert "High priority" in glance and "Need 3,410 more gold" in glance
     assert "Top enemy threats" in glance and "Lion" in glance
+    bkb = next(block.value for block in live_tab.markdown if "<b>Black King Bar</b>" in block.value)
+    assert "Alternative:" in bkb and "Linken&#x27;s Sphere" in bkb
 
     dashboard.multiselect[0].set_value([]).run()
     assert not dashboard.exception
@@ -32,3 +34,5 @@ def test_match_glance_distinguishes_mock_live_status_and_missing_lineup(monkeypa
     assert "Situational" in glance and "Wraith Band" in glance
     assert "Enemy lineup not available" in glance
     assert "Lion" not in glance
+    treads = next(block.value for block in live_tab.markdown if "<b>Power Treads</b>" in block.value)
+    assert "Need 260 more gold" in treads

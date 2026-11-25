@@ -82,3 +82,33 @@ def test_analyze_runs_offline_on_all_mock_scenarios(tmp_path):
         assert result["recommendations"]
         assert not result["used_history"]
     assert conn.execute("SELECT COUNT(*) FROM game_snapshots").fetchone()[0] == 3
+
+
+def test_ranged_hero_gets_no_melee_only_alternatives_or_counters():
+    state = MockProvider(scenario="03_late_lina").current_state()
+    threats = counter_analyzer.analyze_threats(["npc_dota_hero_phantom_lancer"])
+    for r in item_recommender.recommend_items(state, threats, limit=20):
+        assert r.alternative != "bfury"
+        assert r.alternative is not None, r.item
+    counters = counter_analyzer.counter_items(threats, my_hero=state.hero.name)
+    assert "bfury" not in {c.item for c in counters}
+
+
+def test_owned_components_reduce_gold_needed():
+    state = parse_gsi({"map": {"clock_time": 300}, "player": {"gold": 0},
+                       "hero": {"name": "npc_dota_hero_juggernaut"},
+                       "items": {"slot0": {"name": "item_boots"}}})
+    treads = next(r for r in item_recommender.recommend_items(state, [], limit=20) if r.item == "power_treads")
+    assert treads.remaining_gold == -(1400 - 500)
+
+
+def test_nested_components_and_spike_tip_use_gold_needed():
+    from app.engine.item_recommender import _gold_needed
+
+    assert _gold_needed("octarine_core", ["point_booster"]) == 5100 - 1200
+    state = parse_gsi({"map": {"clock_time": 300}, "player": {"gold": 640},
+                       "hero": {"name": "npc_dota_hero_juggernaut", "level": 5, "health_percent": 90},
+                       "items": {"slot0": {"name": "item_boots"}}})
+    recs = [r for r in item_recommender.recommend_items(state, [], limit=20) if r.item == "power_treads"]
+    tips = [s.text for s in decision_engine.suggest(state, [], recs) if s.category == "power_spike"]
+    assert tips and "260 gold away" in tips[0]

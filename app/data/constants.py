@@ -249,7 +249,7 @@ ALTERNATIVES = {
     "dust": "ward_sentry",
     "ward_sentry": "gem",
     "gem": "dust",
-    "mjollnir": "bfury",
+    "mjollnir": ("bfury", "gungir"),
     "bfury": "mjollnir",
     "spirit_vessel": "shivas_guard",
     "shivas_guard": "skadi",
@@ -264,7 +264,27 @@ ALTERNATIVES = {
     "phase_boots": "power_treads",
     "arcane_boots": "tranquil_boots",
     "magic_wand": "bracer",
+    "wraith_band": "bracer",
+    "bracer": "wraith_band",
+    "null_talisman": "bracer",
+    "tranquil_boots": "arcane_boots",
+    "maelstrom": "desolator",
+    "butterfly": "satanic",
+    "satanic": "butterfly",
+    "blink": "force_staff",
+    "force_staff": "glimmer_cape",
+    "sange_and_yasha": "manta",
+    "heart": "assault",
+    "octarine_core": ("ultimate_scepter", "bloodstone"),
+    "ultimate_scepter": "octarine_core",
+    "refresher": ("sheepstick", "ethereal_blade"),
 }
+
+
+def alternatives(item: str) -> tuple[str, ...]:
+    """Alternatives for an item, in order of preference."""
+    alt = ALTERNATIVES.get(item)
+    return (alt,) if isinstance(alt, str) else tuple(alt or ())
 
 # Items built from these components count as "already covered".
 UPGRADES = {

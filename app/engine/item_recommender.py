@@ -35,6 +35,24 @@ def _owned_or_upgraded(item: str, owned: set[str]) -> bool:
     return any(up in owned for up in C.UPGRADES.get(item, []))
 
 
+def _gold_needed(item: str, inventory: list[str]) -> int | None:
+    """Gold still needed for an item, counting (nested) components already in the inventory."""
+    if C.item_cost(item) is None:
+        return None
+    spare = list(inventory)
+
+    def needed(key: str, top: bool = False) -> int:
+        if not top and key in spare:
+            spare.remove(key)
+            return 0
+        cost = C.item_cost(key) or 0
+        components = [c for c in C.items().get(key, {}).get("components") or [] if c]
+        recipe = cost - sum(C.item_cost(c) or 0 for c in components)
+        return max(recipe, 0) + sum(needed(c) for c in components) if components else cost
+
+    return needed(item, top=True)
+
+
 def _popularity_share(popularity: dict | None, phase_key: str, item: str) -> float | None:
     if not popularity:
         return None
@@ -93,17 +111,17 @@ def recommend_items(state: GameState, threats: list[Threat], *, popularity: dict
             score += min(0.3, share * 3)
             reasons.append(f"{share:.0%} of recent {phase_key}-phase purchases on this hero (OpenDota)")
         cost = C.item_cost(item)
-        alt = C.ALTERNATIVES.get(item)
-        if alt and _owned_or_upgraded(alt, owned):
-            alt = None
+        alt = next((a for a in C.alternatives(item)
+                    if a in C.items() and not _owned_or_upgraded(a, owned) and _fit_weight(a, hero) > 0), None)
+        needed = _gold_needed(item, state.items)
         counter_hits = sum(len(h) for h in c["counters"].values())
         priority = Priority.HIGH if (score >= 1.6 or (counter_hits >= 2 and score >= 1.2)) else Priority.SITUATIONAL
         recs.append(ItemRecommendation(
             item=item, item_name=C.item_display(item), cost=cost, priority=priority,
             reason="; ".join(reasons), benefit=c["benefit"],
             alternative=alt, alternative_name=C.item_display(alt) if alt else None,
-            remaining_gold=(state.gold - cost) if (state.gold is not None and cost is not None) else None,
-            affordable=(state.gold >= cost) if (state.gold is not None and cost is not None) else None,
+            remaining_gold=(state.gold - needed) if (state.gold is not None and needed is not None) else None,
+            affordable=(state.gold >= needed) if (state.gold is not None and needed is not None) else None,
             score=round(score, 2),
         ))
     recs.sort(key=lambda r: r.score, reverse=True)

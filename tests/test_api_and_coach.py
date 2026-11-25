@@ -29,3 +29,35 @@ def test_coach_report_from_match_payload():
     assert report["result"] == "Win" and report["hero"] == "Juggernaut"
     assert report["item_timings"][0]["minute"] == 25.0
     assert len(report["suggestions"]) >= 3
+
+
+def test_unknown_scenario_is_404():
+    from app.main import app
+
+    client = TestClient(app)
+    assert client.get("/analysis", params={"scenario": "nope"}).status_code == 404
+
+
+def test_reports_kept_per_player(tmp_path):
+    from app.database import models as db
+    from app.database.connection import connect
+
+    conn = connect(tmp_path / "t.db")
+    db.save_report(conn, {"match_id": "1", "hero": "Juggernaut"})
+    db.save_report(conn, {"match_id": "1", "hero": "Lina"})
+    assert {r["hero"] for r in db.list_reports(conn)} == {"Juggernaut", "Lina"}
+
+
+def test_request_error_hides_api_key():
+    import requests
+
+    from app.data.opendota import OpenDotaClient, OpenDotaError
+
+    class Boom:
+        def get(self, url, params=None, timeout=None):
+            raise requests.ConnectionError(f"failed {url}?api_key={params['api_key']}")
+
+    try:
+        OpenDotaClient(api_key="SECRETKEY", offline=False, http=Boom()).match(1)
+    except OpenDotaError as exc:
+        assert "SECRETKEY" not in str(exc)
