@@ -1,0 +1,108 @@
+{
+  "dotasense_mock": {
+    "is_mock": true,
+    "scenario_name": "MOCK: Late game \u2014 Lina vs illusions and pushers",
+    "note": "MOCK DATA written by hand for development. Not a real match.",
+    "enemy_heroes": [
+      "phantom_lancer",
+      "naga_siren",
+      "furion",
+      "bristleback",
+      "dazzle"
+    ],
+    "ally_heroes": [
+      "tidehunter",
+      "earthshaker",
+      "sven",
+      "lion"
+    ]
+  },
+  "provider": {
+    "name": "Dota 2",
+    "appid": 570
+  },
+  "map": {
+    "name": "start",
+    "matchid": "0",
+    "game_time": 2250,
+    "clock_time": 2160,
+    "daytime": true,
+    "game_state": "DOTA_GAMERULES_STATE_GAME_IN_PROGRESS"
+  },
+  "player": {
+    "team_name": "radiant",
+    "gold": 4300,
+    "kills": 12,
+    "deaths": 5,
+    "assists": 14,
+    "last_hits": 240,
+    "gpm": 610,
+    "xpm": 690
+  },
+  "hero": {
+    "name": "npc_dota_hero_lina",
+    "level": 24,
+    "alive": true,
+    "health_percent": 90,
+    "mana_percent": 70
+  },
+  "abilities": {
+    "ability0": {
+      "name": "lina_dragon_slave",
+      "level": 4,
+      "can_cast": true,
+      "cooldown": 0,
+      "ultimate": false
+    },
+    "ability1": {
+      "name": "lina_light_strike_array",
+      "level": 4,
+      "can_cast": true,
+      "cooldown": 0,
+      "ultimate": false
+    },
+    "ability2": {
+      "name": "lina_fiery_soul",
+      "level": 4,
+      "can_cast": true,
+      "cooldown": 0,
+      "ultimate": false
+    },
+    "ability3": {
+      "name": "lina_laguna_blade",
+      "level": 3,
+      "can_cast": true,
+      "cooldown": 0,
+      "ultimate": true
+    }
+  },
+  "items": {
+    "slot0": {
+      "name": "item_travel_boots"
+    },
+    "slot1": {
+      "name": "item_black_king_bar"
+    },
+    "slot2": {
+      "name": "item_ultimate_scepter"
+    },
+    "slot3": {
+      "name": "item_magic_wand"
+    },
+    "slot4": {
+      "name": "item_force_staff"
+    },
+    "slot5": {
+      "name": "empty"
+    },
+    "slot6": {
+      "name": "empty"
+    },
+    "slot7": {
+      "name": "empty"
+    },
+    "slot8": {
+      "name": "empty"
+    }
+  }
+}
