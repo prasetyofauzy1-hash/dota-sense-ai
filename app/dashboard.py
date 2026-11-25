@@ -60,6 +60,13 @@ def fmt_time(seconds: int | None) -> str:
     return f"{sign}{seconds // 60}:{seconds % 60:02d}"
 
 
+def render_counter(ci) -> None:
+    kind = "Defensive" if ci.defensive else "Offensive"
+    st.markdown(f"<div class='ds-card'><b>{ci.item_name}</b> <small>{kind}</small><br>"
+                f"{ci.explanation}<br><small>Against: {', '.join(ci.against_heroes)} · "
+                f"Counters: {', '.join(ci.counters)}</small></div>", unsafe_allow_html=True)
+
+
 # ---------------- Sidebar ----------------
 with st.sidebar:
     st.title("🛡️ DotaSense AI")
@@ -161,6 +168,8 @@ with tab_live:
 
     # 5. Enemy Threat Analysis
     st.subheader("5 · Enemy Threat Analysis")
+    st.caption(("Mock lineup · " if state.is_mock else "") +
+               "Heuristic scouting, not a live threat score. Role-only hints do not establish specific counters.")
     if not result["threats"]:
         st.markdown(MISSING + " — add the visible enemy lineup in the sidebar", unsafe_allow_html=True)
     else:
@@ -169,20 +178,26 @@ with tab_live:
             st.markdown("**Biggest threats**")
             for t in result["threats"]:
                 abil = ", ".join(result["enemy_abilities"].get(t.hero_name, [])[:4])
-                src = "curated tags" if t.tags_source == "curated" else "inferred from OpenDota roles"
+                src = "Curated heuristic" if t.tags_source == "curated" else "Uncertain · OpenDota roles only"
                 st.markdown(f"<div class='ds-card'><b>{t.hero_name}</b> "
-                            f"<small>severity {t.severity}</small><br>{t.explanation}<br>"
+                            f"<small>rule score {t.severity}</small><br>{t.explanation}<br>"
                             f"<small>Abilities: {abil or 'n/a'} · {src}</small></div>", unsafe_allow_html=True)
         with ccol:
             st.markdown("**Counter items**")
-            for ci in result["counters"][:8]:
-                kind = "Defensive" if ci.defensive else "Offensive"
-                st.markdown(f"<div class='ds-card'><b>{ci.item_name}</b> <small>{kind}</small><br>"
-                            f"{ci.explanation}<br><small>Against: {', '.join(ci.against_heroes)} · "
-                            f"Counters: {', '.join(ci.counters)}</small></div>", unsafe_allow_html=True)
+            counters = result["counters"]
+            if not counters:
+                st.caption("No new counter items supported by these tags and your inventory.")
+            for ci in counters[:8]:
+                render_counter(ci)
+            if len(counters) > 8:
+                with st.expander(f"More counter options ({len(counters) - 8})"):
+                    for ci in counters[8:]:
+                        render_counter(ci)
 
     # 6. Strategic Suggestions
     st.subheader("6 · Strategic Suggestions")
+    st.caption(("Mock match · " if state.is_mock else "") +
+               "Conditional calls: check the map, cooldowns and team readiness before acting.")
     for s in result["suggestions"]:
         cls = "ds-b-high" if s.confidence == "high" else "ds-b-sit" if s.confidence == "medium" else "ds-b-unc"
         label = "UNCERTAIN" if "uncertain" in s.confidence else f"{s.confidence.upper()} CONFIDENCE"
