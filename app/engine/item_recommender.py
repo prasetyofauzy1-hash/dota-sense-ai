@@ -19,7 +19,8 @@ TANK_ITEMS = {"crimson_guard", "blade_mail", "eternal_shroud", "heavens_halberd"
 CASTER_DEFENSE_ITEMS = {"cyclone", "aeon_disk"}
 SUPPORT_ITEMS = {"glimmer_cape", "pipe", "solar_crest", "crimson_guard", "force_staff", "gem", "ward_sentry", "dust"}
 DETECTION_ITEMS = {"dust", "ward_sentry", "gem"}
-UPGRADED_BOOTS = {"power_treads", "phase_boots", "arcane_boots", "tranquil_boots", "travel_boots"}
+STANDARD_BOOTS = {"power_treads", "phase_boots", "arcane_boots", "tranquil_boots"}
+UPGRADED_BOOTS = STANDARD_BOOTS | {"travel_boots"}
 FARMING_ITEMS = {"bfury", "maelstrom"}
 LANING_EXPENSIVE_THRESHOLD = 2000
 
@@ -49,7 +50,7 @@ def _fit_weight(item: str, hero: dict) -> float:
 def _owned_or_upgraded(item: str, owned: set[str]) -> bool:
     if item in owned:
         return True
-    if item in UPGRADED_BOOTS and owned & UPGRADED_BOOTS:
+    if item in STANDARD_BOOTS and owned & UPGRADED_BOOTS:
         return True
     if item in FARMING_ITEMS and owned & FARMING_ITEMS:
         return True

@@ -172,3 +172,13 @@ def test_counter_alternatives_also_counter_the_threat():
     by_item = {r.item: r for r in recs}
     assert by_item["skadi"].alternative in {"spirit_vessel", "shivas_guard"}
     assert by_item["manta"].alternative in {"black_king_bar", "cyclone"}
+
+
+def test_power_treads_still_allows_boots_of_travel_vs_pushers():
+    state = MockProvider(scenario="02_midgame_juggernaut").current_state()
+    state.enemy_heroes = ["furion", "naga_siren", "lycan"]
+    threats = counter_analyzer.analyze_threats(state.enemy_heroes)
+    recs = item_recommender.recommend_items(state, threats, limit=20)
+    items = {r.item for r in recs}
+    assert "travel_boots" in items
+    assert "phase_boots" not in items
