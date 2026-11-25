@@ -389,6 +389,21 @@ def test_linkens_is_bkb_alternative_against_unit_targeted_piercing_lockdown(enem
     assert next(r for r in recs if r.item == "black_king_bar").alternative == "sphere"
 
 
+@pytest.mark.parametrize(("enemies", "bkb_reason"), [
+    (["doom_bringer", "queenofpain"], "magic burst damage"),
+    (["sven", "silencer"], "basic-dispellable control"),
+])
+def test_linkens_is_not_bkb_alternative_when_it_cannot_cover_the_cards_reasons(enemies, bkb_reason):
+    state = _state()
+    state.enemy_heroes = enemies
+    threats = counter_analyzer.analyze_threats(state.enemy_heroes)
+    recs = item_recommender.recommend_items(state, threats, limit=20)
+    by_item = {r.item: r for r in recs}
+    assert bkb_reason in by_item["black_king_bar"].reason
+    assert by_item["black_king_bar"].alternative != "sphere"
+    assert "sphere" in by_item
+
+
 def test_power_treads_still_allows_boots_of_travel_vs_pushers():
     state = MockProvider(scenario="02_midgame_juggernaut").current_state()
     state.enemy_heroes = ["furion", "naga_siren", "lycan"]

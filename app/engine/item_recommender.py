@@ -96,8 +96,12 @@ def _popularity_share(popularity: dict | None, phase_key: str, item: str) -> flo
 
 def _pick_alternative(item: str, counters: dict[str, list[str]], owned: set[str], hero: dict, *,
                       allow_bkb_spell_block: bool) -> str | None:
+    spell_block_covers_card = allow_bkb_spell_block and counters.keys() <= {
+        "disable", "targeted_disable", "targeted_piercing_disable",
+    }
+
     def valid(a: str) -> bool:
-        if item == "black_king_bar" and a == "sphere" and not allow_bkb_spell_block:
+        if item == "black_king_bar" and a == "sphere" and not spell_block_covers_card:
             return False
         return a != item and a in C.items() and not _owned_or_upgraded(a, owned) and _fit_weight(a, hero) >= 0.5
 

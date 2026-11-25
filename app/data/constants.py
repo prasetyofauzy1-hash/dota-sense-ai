@@ -65,7 +65,7 @@ def item_cost(key: str) -> int | None:
 THREAT_LABELS = {
     "magic_burst": "Magic burst damage",
     "physical_burst": "Physical burst / right-click",
-    "disable": "Non-piercing hard disables",
+    "disable": "Non-piercing unit-targeted hard disables",
     "targeted_disable": "Unit-targeted lockdown",
     "dispellable": "Basic-dispellable control",
     "area_disable": "Non-unit-targeted lockdown",
