@@ -87,7 +87,8 @@ with st.sidebar:
     hero_options = sorted(C.heroes_by_name(), key=lambda h: C.hero_display(h))
     enemies = st.multiselect("Visible enemy lineup (edit as on the scoreboard)", hero_options,
                              default=[e for e in state.enemy_heroes if e in hero_options],
-                             format_func=C.hero_display, max_selections=5)
+                             format_func=C.hero_display, max_selections=5,
+                             key=f"enemies-{state.match_id or (source if live_mode else scenario)}")
     state.enemy_heroes = enemies
     if not enemies and "enemy_heroes" not in state.missing_fields:
         state.missing_fields.append("enemy_heroes")
