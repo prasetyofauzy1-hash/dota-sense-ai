@@ -88,6 +88,11 @@ def test_preview_omits_a_curated_key_missing_from_snapshot(monkeypatch):
     assert counter_analyzer.hero_abilities("enigma") == ["Malefice", "Midnight Pulse"]
 
 
+def test_riki_preview_names_invisibility_damage_and_control_abilities():
+    preview = counter_analyzer.hero_abilities("riki")[:4]
+    assert preview[:3] == ["Cloak and Dagger", "Backstab", "Smoke Screen"]
+
+
 @pytest.mark.parametrize("has_grasp", [True, False])
 def test_medusa_bkb_card_names_the_spell_only_if_in_snapshot(monkeypatch, has_grasp):
     if not has_grasp:
