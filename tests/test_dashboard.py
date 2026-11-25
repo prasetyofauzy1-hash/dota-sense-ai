@@ -103,3 +103,15 @@ def test_pro_counter_intel_defaults_to_matchup_but_allows_custom_item(monkeypatc
     assert bkb["With item"] == "63.6% (21/33 wins)"
     assert bkb["Without item"] == "56.2% (9/16 wins)"
     assert bkb["Difference"] == "+7.4 pp"
+
+    pro.selectbox[0].set_value("pangolier").run()
+    dashboard.tabs[2].selectbox[1].set_value("medusa").run()
+    pro = dashboard.tabs[2]
+    assert pro.selectbox[2].value == "diffusal_blade"
+    assert "Diffusal Blade (item ID 174)" in pro.selectbox[2].options
+    assert "Diffusal Blade (item ID 196)" in pro.selectbox[2].options
+    pro.selectbox[2].set_value("diffusal_blade_2").run()
+    pro = dashboard.tabs[2]
+    diffusal = pro.dataframe[0].value.set_index("Item")["With item"]
+    assert diffusal["Diffusal Blade (item ID 174)"] == "100.0% (3/3 wins)"
+    assert diffusal["Diffusal Blade (item ID 196)"] == "No games"

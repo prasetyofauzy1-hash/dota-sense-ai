@@ -1,6 +1,8 @@
 """Pro tournament evidence for existing counter rules and custom hero–item comparisons."""
 from __future__ import annotations
 
+from collections import Counter
+
 import streamlit as st
 
 from app.data import constants as C
@@ -11,6 +13,14 @@ from app.models import GameState
 
 def _record_text(record: Record) -> str:
     return f"{record.rate:.1%} ({record.wins}/{record.games} wins)" if record.rate is not None else "No games"
+
+
+def _item_labels(items: set[str]) -> dict[str, str]:
+    names = {item: C.item_display(item) for item in items}
+    counts = Counter(names.values())
+    catalog = C.items()
+    return {item: f"{name} (item ID {catalog[item]['id']})" if counts[name] > 1 else name
+            for item, name in names.items()}
 
 
 def render_pro_counter_panel(state: GameState, hero_options: list[str]) -> None:
@@ -53,10 +63,11 @@ def render_pro_counter_panel(state: GameState, hero_options: list[str]) -> None:
         }
         rules = {entry.item: entry for entry in counter_items(analyze_threats([enemy]), my_hero=hero)
                  if entry.item in shop_items} if enemy else {}
-        items = [*rules, *sorted(shop_items - rules.keys(), key=C.item_display)]
+        labels = _item_labels(shop_items)
+        items = [*rules, *sorted(shop_items - rules.keys(), key=labels.__getitem__)]
         selected = item_choice.selectbox(
             "Inspect an item", items, index=0 if rules else None,
-            placeholder="Choose an item (e.g. Radiance)", format_func=C.item_display,
+            placeholder="Choose an item (e.g. Radiance)", format_func=labels.__getitem__,
             key=f"pro-item-{hero}-{enemy}",
         )
         enemy_id = heroes[enemy]["id"] if enemy else None
@@ -67,7 +78,7 @@ def render_pro_counter_panel(state: GameState, hero_options: list[str]) -> None:
             st.info("No matches for this selection. Try All opponents for the hero’s overall record.")
         elif selected:
             if selected in rules:
-                st.caption(f"Why counter rules suggest {C.item_display(selected)}: {rules[selected].explanation}")
+                st.caption(f"Why counter rules suggest {labels[selected]}: {rules[selected].explanation}")
             else:
                 st.caption("Custom item comparison · not a rules-based counter recommendation.")
             rows = []
@@ -75,7 +86,7 @@ def render_pro_counter_panel(state: GameState, hero_options: list[str]) -> None:
                 comparison = compare_item(games, item_catalog[item]["id"])
                 gap = comparison.gap_pp
                 rows.append({
-                    "Item": C.item_display(item),
+                    "Item": labels[item],
                     "With item": _record_text(comparison.with_item),
                     "Without item": _record_text(comparison.without_item),
                     "Difference": f"{gap:+.1f} pp" if gap is not None else "Small sample",
@@ -90,7 +101,7 @@ def render_pro_counter_panel(state: GameState, hero_options: list[str]) -> None:
             )
 
             item_id = item_catalog[selected]["id"]
-            with st.expander(f"Example matches for {C.item_display(selected)}"):
+            with st.expander(f"Example matches for {labels[selected]}"):
                 with_col, without_col = st.columns(2)
                 for column, present in ((with_col, True), (without_col, False)):
                     column.markdown("**With item**" if present else "**Without item**")
