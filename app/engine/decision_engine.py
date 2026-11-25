@@ -55,10 +55,13 @@ def suggest(state: GameState, threats: list[Threat], recs: list[ItemRecommendati
                                   reasons=[f"K/D/A {state.kills}/{state.deaths}/{state.assists} does not establish a team lead"]))
 
     # Push / defend
-    piercing = [t.hero_name for t in threats if "piercing_disable" in t.tags]
+    piercing_tags = {"targeted_piercing_disable", "area_piercing_disable"}
+    piercing = [t.hero_name for t in threats if piercing_tags.intersection(t.tags)]
     if piercing:
+        positioning = ("Watch your positioning against control that does not need a unit target. "
+                       if any("area_piercing_disable" in t.tags for t in threats) else "")
         out.append(Suggestion(category="team_fight", confidence=UNCERTAIN,
-                              text="Don't count on BKB for piercing lockdown. Spread out against area control and check whether the key spell was used before committing.",
+                              text=f"Don't count on BKB for piercing lockdown. {positioning}Check whether the key spell was used before committing.",
                               reasons=[f"lineup threats: {', '.join(piercing)}; enemy cooldowns are unknown"]))
 
     pushers = [t.hero_name for t in threats if "push" in t.tags or "role_push" in t.tags]

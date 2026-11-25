@@ -44,16 +44,18 @@ def test_threats_use_curated_then_roles():
     ("storm_spirit", "mobility", "dispellable", "sheepstick"),
     ("tinker", "magic_burst", "push", "pipe"),
     ("broodmother", "summons", "illusions", "crimson_guard"),
-    ("sven", "targeted_disable", "piercing_disable", "sphere"),
-    ("chaos_knight", "targeted_disable", "piercing_disable", "sphere"),
-    ("dragon_knight", "targeted_disable", "piercing_disable", "sphere"),
+    ("sven", "targeted_disable", "targeted_piercing_disable", "sphere"),
+    ("chaos_knight", "targeted_disable", "targeted_piercing_disable", "sphere"),
+    ("dragon_knight", "targeted_disable", "targeted_piercing_disable", "sphere"),
     ("medusa", "mana_shield", "passive", "diffusal_blade"),
     ("phantom_lancer", "illusions", "evasion", "mjollnir"),
     ("antimage", "mobility", "passive", "orchid"),
     ("silencer", "dispellable", "disable", "manta"),
-    ("doom_bringer", "piercing_disable", "dispellable", "sphere"),
-    ("faceless_void", "piercing_disable", "evasion", "aeon_disk"),
-    ("enigma", "piercing_disable", "illusions", "aeon_disk"),
+    ("doom_bringer", "targeted_piercing_disable", "dispellable", "sphere"),
+    ("faceless_void", "area_piercing_disable", "evasion", "aeon_disk"),
+    ("enigma", "area_piercing_disable", "illusions", "aeon_disk"),
+    ("pudge", "area_piercing_disable", "area_disable", "sphere"),
+    ("shadow_shaman", "targeted_disable", "targeted_piercing_disable", "sphere"),
     ("pugna", "dispellable_save", "passive", "nullifier"),
     ("chen", "healing", "illusions", "spirit_vessel"),
 ])
@@ -365,6 +367,8 @@ def test_linkens_alternative_to_bkb_requires_targeted_lockdown():
     ["enigma", "tidehunter"],
     ["sven", "tidehunter"],
     ["sven", "enigma"],
+    ["sven", "puck"],
+    ["sven", "pudge"],
 ])
 def test_linkens_is_not_bkb_alternative_against_area_or_piercing_lockdown(enemies):
     state = MockProvider(scenario="02_midgame_juggernaut").current_state()
@@ -373,6 +377,16 @@ def test_linkens_is_not_bkb_alternative_against_area_or_piercing_lockdown(enemie
     recs = item_recommender.recommend_items(state, threats, limit=20)
     assert next(r for r in recs if r.item == "black_king_bar").alternative != "sphere"
     assert any(r.item == "sphere" for r in recs)
+
+
+@pytest.mark.parametrize("enemy", ["legion_commander", "doom_bringer", "bane"])
+def test_linkens_is_bkb_alternative_against_unit_targeted_piercing_lockdown(enemy):
+    state = MockProvider(scenario="02_midgame_juggernaut").current_state()
+    state.enemy_heroes = ["sven", enemy]
+    threats = counter_analyzer.analyze_threats(state.enemy_heroes)
+    assert "targeted_piercing_disable" in next(t.tags for t in threats if t.hero == enemy)
+    recs = item_recommender.recommend_items(state, threats, limit=20)
+    assert next(r for r in recs if r.item == "black_king_bar").alternative == "sphere"
 
 
 def test_power_treads_still_allows_boots_of_travel_vs_pushers():

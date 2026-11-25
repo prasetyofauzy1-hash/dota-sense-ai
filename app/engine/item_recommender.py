@@ -126,9 +126,9 @@ def recommend_items(state: GameState, threats: list[Threat], *, popularity: dict
     attr = hero.get("primary_attr") or "all"
     attr_label = C.ATTR_LABELS.get(attr, attr)
     build = C.CORE_BUILD.get(attr, C.CORE_BUILD["all"])
-    allow_bkb_spell_block = any("targeted_disable" in threat.tags for threat in threats) and not any(
-        "piercing_disable" in threat.tags or ("disable" in threat.tags and "targeted_disable" not in threat.tags)
-        for threat in threats
+    threat_tags = {tag for threat in threats for tag in threat.tags}
+    allow_bkb_spell_block = bool(threat_tags & {"targeted_disable", "targeted_piercing_disable"}) and not (
+        threat_tags & {"area_disable", "area_piercing_disable"}
     )
 
     candidates: dict[str, dict] = {}
