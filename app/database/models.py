@@ -42,7 +42,8 @@ LOCK = threading.RLock()
 
 
 def cache_get(conn: sqlite3.Connection, key: str, max_age: float) -> Any | None:
-    row = conn.execute("SELECT payload, fetched_at FROM api_cache WHERE key = ?", (key,)).fetchone()
+    with LOCK:
+        row = conn.execute("SELECT payload, fetched_at FROM api_cache WHERE key = ?", (key,)).fetchone()
     if row is None or time.time() - row["fetched_at"] > max_age:
         return None
     return json.loads(row["payload"])
@@ -86,5 +87,6 @@ def save_report(conn: sqlite3.Connection, report: dict) -> None:
 
 
 def list_reports(conn: sqlite3.Connection) -> list[dict]:
-    rows = conn.execute("SELECT payload FROM match_reports ORDER BY created_at DESC").fetchall()
+    with LOCK:
+        rows = conn.execute("SELECT payload FROM match_reports ORDER BY created_at DESC").fetchall()
     return [json.loads(r["payload"]) for r in rows]
