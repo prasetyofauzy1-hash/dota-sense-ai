@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import sys
+from html import escape
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -18,23 +19,39 @@ from app.database.connection import connect  # noqa: E402
 from app.engine.coach import coach_match, parse_account_id  # noqa: E402
 from app.gsi import dota_cfg  # noqa: E402
 from app.gsi.provider import LiveGSIProvider, MockProvider  # noqa: E402
+from app.models import DataSource, GameState, ItemRecommendation, Priority, Threat  # noqa: E402
 from app.services import analyze  # noqa: E402
 
-st.set_page_config(page_title="DotaSense AI", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="DotaSense AI", page_icon="🛡️", layout="wide", initial_sidebar_state="collapsed")
 st.markdown("""
 <style>
-.block-container {padding-top: 3.5rem;}
-.ds-card {background:#1a1f2b;border:1px solid #2a3142;border-radius:10px;padding:12px 14px;margin-bottom:10px;}
+.block-container {padding-top:4rem;max-width:88rem;}
+.ds-card {background:#1a1f2b;border:1px solid #333c50;border-radius:10px;padding:12px 14px;overflow-wrap:anywhere;}
 .ds-high {border-left:5px solid #e8473c;}
 .ds-sit {border-left:5px solid #f2b134;}
-.ds-missing {color:#8a93a6;font-style:italic;}
-.ds-badge {display:inline-block;padding:2px 8px;border-radius:999px;font-size:0.75rem;font-weight:600;margin-right:6px;}
+.ds-missing {color:#c4cad6;font-style:italic;}
+.ds-badge {display:inline-block;padding:2px 8px;border-radius:6px;font-size:.8rem;font-weight:700;margin-right:6px;}
 .ds-b-high {background:#e8473c33;color:#ff8077;}
 .ds-b-sit {background:#f2b13433;color:#f7c25d;}
-.ds-b-unc {background:#6b728033;color:#b8bfcc;}
 .ds-b-ok {background:#2ecc7133;color:#5be08f;}
-.ds-b-off {background:#6b728033;color:#b8bfcc;}
-.ds-mock {background:#f2b13422;border:1px solid #f2b134;color:#f7c25d;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-weight:600;}
+.ds-b-unc {background:#6b728033;color:#b8bfcc;}
+.ds-b-missing {background:#ab88ff26;color:#dccaff;}
+.ds-status,.ds-metrics,.ds-inventory {display:flex;flex-wrap:wrap;gap:.5rem;}
+.ds-status {align-items:center;gap:.5rem .75rem;}
+.ds-status .ds-badge {margin:0;}
+.ds-metrics {margin:.75rem 0 0;}
+.ds-metrics > div {flex:1 1 6rem;min-width:0;background:#111722;border-radius:6px;padding:.45rem .65rem;}
+.ds-metrics > .ds-hero {flex-basis:8rem;}
+.ds-metrics dt,.ds-secondary {font-size:.875rem;color:#c4cad6;}
+.ds-metrics dd {margin:0;font-size:1.125rem;font-weight:700;}
+.ds-metrics .ds-clock dd {font-size:1.5rem;line-height:1.2;font-variant-numeric:tabular-nums;}
+.ds-glance {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,23rem),1fr));gap:.75rem;margin-block:.75rem;}
+.ds-glance h3 {font-size:1rem;color:#c4cad6;padding:0;margin:0 0 .45rem;}
+.ds-item-name {display:block;font-size:1.65rem;line-height:1.15;margin:.45rem 0;}
+.ds-glance ul {list-style:none;padding:0;margin:0;}
+.ds-glance li {margin:0;padding:.25rem 0;}
+.ds-glance li + li {border-top:1px solid #333c50;}
+.ds-inventory > div {flex:1 1 8rem;min-width:0;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -63,6 +80,104 @@ def fmt_time(seconds: int | None) -> str:
     return f"{sign}{seconds // 60}:{seconds % 60:02d}"
 
 
+def item_priority(rec: ItemRecommendation) -> tuple[str, str, str]:
+    return {
+        Priority.HIGH: ("ds-high", "ds-b-high", "High priority"),
+        Priority.SITUATIONAL: ("ds-sit", "ds-b-sit", "Situational"),
+        Priority.LOW: ("", "ds-b-unc", "Low priority"),
+    }[rec.priority]
+
+
+def item_price(rec: ItemRecommendation) -> str:
+    if rec.cost is None:
+        return "Cost not available"
+    if rec.owned_components and rec.upgrade_cost is not None:
+        components = escape(", ".join(rec.owned_components))
+        return f"{rec.cost:,} gold · {rec.upgrade_cost:,} gold to finish (have {components})"
+    return f"{rec.cost:,} gold"
+
+
+def buy_now_badge(rec: ItemRecommendation) -> str:
+    return "<span class='ds-badge ds-b-ok'>Buy now</span>" if rec.affordable else ""
+
+
+def item_budget(rec: ItemRecommendation) -> str:
+    if rec.affordable:
+        return f"Affordable now · {rec.remaining_gold:,} gold left"
+    if rec.remaining_gold is not None:
+        return f"Need {-rec.remaining_gold:,} more gold"
+    return "Gold not available"
+
+
+def live_gsi_status(state: GameState) -> str:
+    if not settings.live_integration_enabled:
+        return "Off"
+    if state.is_mock:
+        return "On · mock view"
+    if state.source == DataSource.LIVE_GSI:
+        return "Receiving data"
+    return "Waiting for game"
+
+
+def render_glance(state: GameState, hero_name: str, phase: str, live_status: str, history_status: str,
+                  recommendations: list[ItemRecommendation], threats: list[Threat]) -> None:
+    if state.is_mock:
+        scenario = escape((state.scenario_name or "").removeprefix("MOCK: "))
+        source = ("<span class='ds-badge ds-b-sit'>MOCK DATA</span>"
+                  f"<span>{scenario or 'Practice scenario'} · Not a real match</span>")
+    elif state.source == DataSource.LIVE_GSI:
+        source = "<span class='ds-badge ds-b-unc'>LIVE DATA</span>"
+    else:
+        source = "<span class='ds-badge ds-b-unc'>No match data</span>"
+    metrics = [
+        ("Game time", fmt_time(state.game_time), "ds-clock"),
+        ("Match", "Active" if state.match_active else "Not detected", ""),
+        ("Phase", phase.replace("_", " ").title() if state.game_time is not None else MISSING, ""),
+        ("Hero", escape(hero_name) if state.hero.name else MISSING, "ds-hero"),
+        ("Gold", f"{state.gold:,}" if state.gold is not None else MISSING, ""),
+    ]
+    metric_html = "".join(
+        f"<div class='{cls}'><dt>{label}</dt><dd>{value}</dd></div>" for label, value, cls in metrics
+    )
+    st.markdown(
+        f"<div class='ds-card'><div class='ds-status'>{source}"
+        f"<span class='ds-badge ds-b-unc'>Live GSI: {live_status}</span>"
+        f"<span class='ds-badge ds-b-unc'>{history_status}</span></div>"
+        f"<dl class='ds-metrics'>{metric_html}</dl></div>", unsafe_allow_html=True)
+
+    if state.missing_fields:
+        labels = {"enemy_heroes": "enemy lineup", "items": "inventory"}
+        missing = ", ".join(labels.get(field, field.replace("_", " ")) for field in state.missing_fields)
+        st.markdown(f"<span class='ds-badge ds-b-missing'>Missing data:</span> {escape(missing)}",
+                    unsafe_allow_html=True)
+
+    card_class = ""
+    next_item = "<span class='ds-missing'>No recommendation available</span>"
+    if recommendations:
+        top = recommendations[0]
+        card_class, badge_class, label = item_priority(top)
+        next_item = (f"<span class='ds-badge {badge_class}'>{label}</span>"
+                     f"{buy_now_badge(top)}"
+                     f"<strong class='ds-item-name'>{escape(top.item_name)}</strong>"
+                     f"<span class='ds-secondary'>{item_price(top)}</span><br><strong>{item_budget(top)}</strong>")
+    if not state.enemy_heroes:
+        next_item += "<br><span class='ds-secondary'>Core build only · Add enemies in the sidebar for counter items.</span>"
+    if threats:
+        rows = []
+        for threat in threats[:2]:
+            tags = ", ".join(C.THREAT_LABELS[tag] for tag in threat.tags) or "No known threat tags"
+            rows.append(f"<li><strong>{escape(threat.hero_name)}</strong><br>"
+                        f"<span class='ds-secondary'>{escape(tags)}</span></li>")
+        top_threats = f"<ul>{''.join(rows)}</ul>"
+    else:
+        top_threats = ("<strong>Enemy lineup not available</strong><br>"
+                       "<span class='ds-secondary'>Add visible enemies in the sidebar to see threats.</span>")
+    st.markdown(f"<div class='ds-glance'>"
+                f"<section class='ds-card {card_class}'><h3>Top item recommendation</h3>{next_item}</section>"
+                f"<section class='ds-card'><h3>Top enemy threats</h3>{top_threats}</section>"
+                f"</div>", unsafe_allow_html=True)
+
+
 # ---------------- Sidebar ----------------
 with st.sidebar:
     st.title("🛡️ DotaSense AI")
@@ -71,7 +186,7 @@ with st.sidebar:
     live = live_provider.status()
     st.markdown("**Connection status**")
     live_badge = "<span class='ds-badge ds-b-ok'>● Live GSI</span>" if live["connected"] else \
-        "<span class='ds-badge ds-b-off'>○ Live GSI</span>"
+        "<span class='ds-badge ds-b-unc'>○ Live GSI</span>"
     st.markdown(f"{live_badge} {live['detail']}", unsafe_allow_html=True)
     sources = ([LIVE_SOURCE] if settings.live_integration_enabled else []) + [MOCK_SOURCE]
     source = st.radio("Data source", sources, horizontal=True)
@@ -84,6 +199,7 @@ with st.sidebar:
         names = mock.scenario_names()
         scenario = st.selectbox("Mock scenario", names, format_func=lambda n: mock.load(n)["dotasense_mock"]["scenario_name"])
         state = MockProvider(scenario=scenario).current_state()
+    live_status = live_gsi_status(state)
     hero_options = sorted(C.heroes_by_name(), key=lambda h: C.hero_display(h))
     enemies = st.multiselect("Visible enemy lineup (edit as on the scoreboard)", hero_options,
                              default=[e for e in state.enemy_heroes if e in hero_options],
@@ -137,38 +253,59 @@ if live_mode and auto_refresh and hasattr(st, "fragment"):
 
 result = analyze(state, conn, client, use_history=use_history)
 
-if state.is_mock:
-    st.markdown(f"<div class='ds-mock'>⚠ MOCK DATA — {state.scenario_name}. "
-                "This is a hand-written practice scenario, not a real match.</div>", unsafe_allow_html=True)
-for note in result["notes"]:
-    st.info(note)
-
 tab_live, tab_post = st.tabs(["Live Match", "Post-Match Reports"])
 
 with tab_live:
     if live_mode:
         render_gsi_setup(live["connected"])
-    # 1. Live Match Overview
-    st.subheader("1 · Live Match Overview")
-    c = st.columns(6)
-    c[0].markdown(f"**Match**<br>{'Active' if state.match_active else 'Not detected'}", unsafe_allow_html=True)
-    c[1].markdown(f"**Game time**<br>{fmt_time(state.game_time)}", unsafe_allow_html=True)
-    c[2].markdown(f"**Phase**<br>{result['phase'].replace('_', ' ').title()}", unsafe_allow_html=True)
-    c[3].markdown(f"**Gold**<br>{val(state.gold)}", unsafe_allow_html=True)
-    c[4].markdown(f"**GPM / XPM**<br>{val(state.gpm)} / {val(state.xpm)}", unsafe_allow_html=True)
-    c[5].markdown(f"**K / D / A**<br>{val(state.kills)} / {val(state.deaths)} / {val(state.assists)}",
-                  unsafe_allow_html=True)
-    if state.missing_fields:
-        st.caption("Missing data: " + ", ".join(state.missing_fields))
+    st.subheader("Match at a glance")
+    history_status = "History-backed" if result["used_history"] else "Rules only"
+    render_glance(state, result["hero_name"], result["phase"], live_status, history_status,
+                  result["recommendations"], result["threats"])
 
-    left, right = st.columns([1, 1])
-    with left:
-        # 2. Hero Information
-        st.subheader("2 · Hero Information")
+    with st.expander("Item recommendation details"):
+        for note in result["notes"]:
+            st.caption(note)
+        if not result["recommendations"]:
+            st.markdown(MISSING + " — no recommendations", unsafe_allow_html=True)
+        for r in result["recommendations"]:
+            card_class, badge_class, label = item_priority(r)
+            alt = f"<br><b>Alternative:</b> {escape(r.alternative_name)}" if r.alternative_name else ""
+            st.markdown(
+                f"<div class='ds-card {card_class}'><span class='ds-badge {badge_class}'>{label}</span>{buy_now_badge(r)}"
+                f"<b>{escape(r.item_name)}</b> <small>({item_price(r)})</small><br><b>Why:</b> {escape(r.reason)}<br>"
+                f"<b>Benefit:</b> {escape(r.benefit)}{alt}<br><small>{item_budget(r)} · score {r.score}</small></div>",
+                unsafe_allow_html=True)
+
+    with st.expander("Enemy threat and counter details"):
+        if not result["threats"]:
+            st.markdown(MISSING + " — add the visible enemy lineup in the sidebar", unsafe_allow_html=True)
+        else:
+            tcol, ccol = st.columns([1, 1])
+            with tcol:
+                st.markdown("**Biggest threats**")
+                for t in result["threats"]:
+                    abil = ", ".join(result["enemy_abilities"].get(t.hero_name, [])[:4])
+                    src = "curated tags" if t.tags_source == "curated" else "inferred from OpenDota roles"
+                    st.markdown(f"<div class='ds-card'><b>{escape(t.hero_name)}</b> "
+                                f"<small>severity {t.severity}</small><br>{escape(t.explanation)}<br>"
+                                f"<small>Abilities: {escape(abil or 'n/a')} · {src}</small></div>", unsafe_allow_html=True)
+            with ccol:
+                st.markdown("**Counter items**")
+                for ci in result["counters"][:8]:
+                    kind = "Defensive" if ci.defensive else "Offensive"
+                    st.markdown(f"<div class='ds-card'><b>{escape(ci.item_name)}</b> <small>{kind}</small><br>"
+                                f"{escape(ci.explanation)}<br><small>Against: {escape(', '.join(ci.against_heroes))} · "
+                                f"Counters: {escape(', '.join(ci.counters))}</small></div>", unsafe_allow_html=True)
+
+    with st.expander("Hero, inventory and match stats"):
         st.markdown(
-            f"<div class='ds-card'><b style='font-size:1.2rem'>{result['hero_name']}</b><br>"
+            f"<div class='ds-card'><b>{escape(result['hero_name'])}</b><br>"
             f"Level {val(state.hero.level)} · HP {val(state.hero.health_percent, '%')} · "
-            f"Mana {val(state.hero.mana_percent, '%')}</div>", unsafe_allow_html=True)
+            f"Mana {val(state.hero.mana_percent, '%')}<br>"
+            f"GPM / XPM: {val(state.gpm)} / {val(state.xpm)} · "
+            f"K / D / A: {val(state.kills)} / {val(state.deaths)} / {val(state.assists)}</div>", unsafe_allow_html=True)
+        st.markdown("**Abilities**")
         if state.abilities:
             st.dataframe(pd.DataFrame([{
                 "Ability": a.name.split("_", 1)[-1].replace("_", " ").title(),
@@ -178,73 +315,15 @@ with tab_live:
             } for a in state.abilities]), hide_index=True, width="stretch")
         else:
             st.markdown(MISSING, unsafe_allow_html=True)
-    with right:
-        # 3. Current Inventory
-        st.subheader("3 · Current Inventory")
+        st.markdown("**Current inventory**")
         if state.items:
-            cols = st.columns(3)
-            for i, item in enumerate(state.items):
-                cols[i % 3].markdown(f"<div class='ds-card'>{C.item_display(item)}<br>"
-                                     f"<small>{val(C.item_cost(item))} gold</small></div>", unsafe_allow_html=True)
+            inventory = "".join(f"<div class='ds-card'>{escape(C.item_display(item))}<br>"
+                                f"<small>{val(C.item_cost(item))} gold</small></div>" for item in state.items)
+            st.markdown(f"<div class='ds-inventory'>{inventory}</div>", unsafe_allow_html=True)
         else:
             st.markdown(MISSING, unsafe_allow_html=True)
 
-    # 4. Recommended Items
-    st.subheader("4 · Recommended Items")
-    if not state.enemy_heroes:
-        st.caption("Showing core build only — add enemy heroes in the sidebar for counter-item recommendations.")
-    if not result["recommendations"]:
-        st.markdown(MISSING + " — hero unknown", unsafe_allow_html=True)
-    for r in result["recommendations"]:
-        high = r.priority.value == "high"
-        badge = "<span class='ds-badge ds-b-high'>HIGH PRIORITY</span>" if high else \
-            "<span class='ds-badge ds-b-sit'>SITUATIONAL</span>"
-        buy_badge = "<span class='ds-badge ds-b-ok'>BUY NOW</span>" if r.affordable else ""
-        if r.cost is None:
-            cost_txt = MISSING
-        elif r.owned_components and r.upgrade_cost is not None:
-            cost_txt = (f"{r.cost:,} gold · {r.upgrade_cost:,} gold to finish "
-                        f"(have {', '.join(r.owned_components)})")
-        else:
-            cost_txt = f"{r.cost:,} gold"
-        if r.affordable:
-            gold_txt = f"Affordable now · {r.remaining_gold:,} gold left after buying"
-        elif r.remaining_gold is not None:
-            gold_txt = f"Need {-r.remaining_gold:,} more gold"
-        else:
-            gold_txt = "Gold not available"
-        alt = f"<br><b>Alternative:</b> {r.alternative_name}" if r.alternative_name else ""
-        st.markdown(
-            f"<div class='ds-card {'ds-high' if high else 'ds-sit'}'>{badge}{buy_badge}<b>{r.item_name}</b> "
-            f"<small>({cost_txt})</small><br><b>Why:</b> {r.reason}<br>"
-            f"<b>Benefit:</b> {r.benefit}{alt}<br><small>{gold_txt} · score {r.score}</small></div>",
-            unsafe_allow_html=True)
-    st.caption("History-backed" if result["used_history"] else "Rules only (no historical data used)")
-
-    # 5. Enemy Threat Analysis
-    st.subheader("5 · Enemy Threat Analysis")
-    if not result["threats"]:
-        st.markdown(MISSING + " — add the visible enemy lineup in the sidebar", unsafe_allow_html=True)
-    else:
-        tcol, ccol = st.columns([1, 1])
-        with tcol:
-            st.markdown("**Biggest threats**")
-            for t in result["threats"]:
-                abil = ", ".join(result["enemy_abilities"].get(t.hero_name, [])[:4])
-                src = "curated tags" if t.tags_source == "curated" else "inferred from OpenDota roles"
-                st.markdown(f"<div class='ds-card'><b>{t.hero_name}</b> "
-                            f"<small>severity {t.severity}</small><br>{t.explanation}<br>"
-                            f"<small>Abilities: {abil or 'n/a'} · {src}</small></div>", unsafe_allow_html=True)
-        with ccol:
-            st.markdown("**Counter items**")
-            for ci in result["counters"][:8]:
-                kind = "Defensive" if ci.defensive else "Offensive"
-                st.markdown(f"<div class='ds-card'><b>{ci.item_name}</b> <small>{kind}</small><br>"
-                            f"{ci.explanation}<br><small>Against: {', '.join(ci.against_heroes)} · "
-                            f"Counters: {', '.join(ci.counters)}</small></div>", unsafe_allow_html=True)
-
-    # 6. Strategic Suggestions
-    st.subheader("6 · Strategic Suggestions")
+    st.subheader("Strategic suggestions")
     for s in result["suggestions"]:
         cls = "ds-b-high" if s.confidence == "high" else "ds-b-sit" if s.confidence == "medium" else "ds-b-unc"
         label = "UNCERTAIN" if "uncertain" in s.confidence else f"{s.confidence.upper()} CONFIDENCE"

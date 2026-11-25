@@ -95,7 +95,11 @@ def run_ui(page, proc, dota: Path, token: str, payload: dict, out: Path) -> None
     page.screenshot(path=str(out / "2-live-gsi.png"), full_page=True)
     assert "MOCK DATA" not in page.content()
 
-    page.get_by_role("button", name="Quit DotaSense AI").click()
+    quit_button = page.get_by_role("button", name="Quit DotaSense AI")
+    expand = page.locator("[data-testid=stExpandSidebarButton]")
+    if expand.count() and expand.first.is_visible():
+        expand.first.click()
+    quit_button.click()
     assert proc.wait(timeout=30) == 0, proc.returncode
 
 
