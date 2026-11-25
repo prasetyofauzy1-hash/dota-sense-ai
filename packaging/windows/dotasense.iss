@@ -29,7 +29,7 @@ CloseApplications=force
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [InstallDelete]
-Type: filesandordirs; Name: "{app}\_internal"
+Type: filesandordirs; Name: "{app}\_internal"; Check: CanClearRuntime
 
 [Files]
 Source: "..\..\dist\DotaSenseAI\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -59,6 +59,26 @@ function WaitForSingleObject(Handle: THandle; Milliseconds: Cardinal): Cardinal;
   external 'WaitForSingleObject@kernel32.dll stdcall';
 function CloseHandle(Handle: THandle): Boolean;
   external 'CloseHandle@kernel32.dll stdcall';
+
+function IsRuntimePath(Path: String): Boolean;
+var
+  RuntimeDir: String;
+begin
+  Result := False;
+  if Path = '' then
+    Exit;
+  StringChangeEx(Path, '/', '\', True);
+  RuntimeDir := AddBackslash(ExpandConstant('{app}\_internal'));
+  if (Path[1] <> '\') and (ExtractFileDrive(Path) = '') then
+    Path := RuntimeDir + Path;
+  Result := Pos(Lowercase(RuntimeDir), Lowercase(AddBackslash(ExpandFileName(Path)))) = 1;
+end;
+
+function CanClearRuntime: Boolean;
+begin
+  { Older launches resolved relative storage overrides from _internal. }
+  Result := not (IsRuntimePath(GetEnv('DOTASENSE_DB_PATH')) or IsRuntimePath(GetEnv('DOTASENSE_DATA_DIR')));
+end;
 
 function UpdatePid: Integer;
 begin

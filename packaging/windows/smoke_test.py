@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -46,6 +47,8 @@ def main(exe: str, out_dir: str) -> None:
         version = os.environ["VERSION"]
         assert f"Version={version}" in marker.read_text(encoding="utf-8-sig")
         marker.write_text("[DotaSense]\nVersion=0.0.0\n", encoding="ascii")
+        env["DOTASENSE_DB_PATH"] = ".\\upgrade-probe.db"
+        write_upgrade_probe(Path(exe).parent / "_internal" / "upgrade-probe.db")
     proc = subprocess.Popen([exe, "--no-window"], env=env)
     try:
         health = wait_json(f"{GSI}/health")
@@ -128,6 +131,16 @@ def quit_app(page) -> None:
     page.get_by_role("button", name="Quit DotaSense AI").click()
 
 
+def write_upgrade_probe(path: Path) -> None:
+    db = sqlite3.connect(path)
+    try:
+        db.execute("CREATE TABLE upgrade_probe (kept TEXT NOT NULL)")
+        db.execute("INSERT INTO upgrade_probe VALUES ('match history')")
+        db.commit()
+    finally:
+        db.close()
+
+
 def check_upgrade(page, proc, app_dir: Path, installer: Path, version: str, env: dict,
                   data: Path, out: Path, token: str) -> None:
     sys.path.insert(0, str(ROOT))
@@ -145,6 +158,11 @@ def check_upgrade(page, proc, app_dir: Path, installer: Path, version: str, env:
         page.goto((data / "desktop_url.txt").read_text(encoding="utf-8").strip())
         page.get_by_text(f"App updates · v{version}", exact=True).wait_for(timeout=60_000)
         assert (data / ".dotasense_gsi_token").read_text(encoding="utf-8").strip() == token
+        db = sqlite3.connect(app_dir / "_internal" / "upgrade-probe.db")
+        try:
+            assert db.execute("SELECT kept FROM upgrade_probe").fetchone() == ("match history",)
+        finally:
+            db.close()
         quit_app(page)
     finally:
         if setup.poll() is None:
