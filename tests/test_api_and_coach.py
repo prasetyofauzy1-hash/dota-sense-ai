@@ -241,3 +241,19 @@ def test_coach_rejects_mismatched_public_account_on_hero_fallback():
     # Private profile (account_id=None) still falls back to hero_id cleanly.
     rep = build_report(match, account_id=12345, hero_id=86)
     assert rep["hero"] == "Rubick"
+
+
+def test_coach_role_uses_early_laning_lh_over_late_net_worth():
+    # Scaling support (Windranger) out-farms offlaner (Axe) by minute 60, but had support laning LH at 10:00.
+    match = {
+        "match_id": 666, "duration": 60 * 60, "radiant_win": True, "game_mode": 2, "lobby_type": 0,
+        "players": [
+            {"player_slot": 0, "hero_id": 56, "net_worth": 47000, "gold_per_min": 800, "last_hits": 600, "lh_t": [0] * 10 + [66], "obs_placed": 0, "sen_placed": 2, "kills": 12, "deaths": 3, "assists": 10},
+            {"player_slot": 1, "hero_id": 39, "net_worth": 35000, "gold_per_min": 670, "last_hits": 550, "lh_t": [0] * 10 + [61], "obs_placed": 2, "sen_placed": 1, "kills": 10, "deaths": 4, "assists": 12},
+            {"player_slot": 2, "hero_id": 2, "net_worth": 26000, "gold_per_min": 480, "last_hits": 340, "lh_t": [0] * 10 + [46], "obs_placed": 0, "sen_placed": 0, "kills": 5, "deaths": 6, "assists": 18},
+            {"player_slot": 3, "hero_id": 21, "net_worth": 33000, "gold_per_min": 546, "last_hits": 389, "lh_t": [0] * 10 + [6], "obs_placed": 4, "sen_placed": 7, "kills": 8, "deaths": 5, "assists": 20},
+            {"player_slot": 4, "hero_id": 51, "net_worth": 19000, "gold_per_min": 380, "last_hits": 102, "lh_t": [0] * 10 + [3], "obs_placed": 23, "sen_placed": 44, "kills": 3, "deaths": 8, "assists": 25},
+        ],
+    }
+    assert build_report(match, hero_id=21)["role"] == "Support"
+    assert build_report(match, hero_id=2)["role"] == "Core"

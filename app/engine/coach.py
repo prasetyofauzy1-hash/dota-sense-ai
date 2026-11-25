@@ -128,7 +128,11 @@ def _infer_role(match: dict, player: dict, hero: dict, minutes: float, is_turbo:
     if len(teammates) < 3:
         return "Support" if (is_support_hero and wards_total >= 3) else "Core"
 
+    has_laning_lh = all(isinstance(p.get("lh_t"), list) and len(p["lh_t"]) > 10 for p in teammates)
+
     def _farm_score(p: dict) -> float:
+        if has_laning_lh:
+            return float(p["lh_t"][10] or 0)
         return float(p.get("net_worth") or p.get("gold_per_min") or 0)
 
     ranked = sorted(teammates, key=_farm_score, reverse=True)
