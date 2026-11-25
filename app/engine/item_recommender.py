@@ -94,11 +94,18 @@ def _popularity_share(popularity: dict | None, phase_key: str, item: str) -> flo
     return bucket.get(str(item_id), 0) / total
 
 
-def _pick_alternative(item: str, counters: dict[str, list[str]], owned: set[str], hero: dict) -> str | None:
+def _pick_alternative(item: str, counters: dict[str, list[str]], owned: set[str], hero: dict, *,
+                      allow_bkb_spell_block: bool) -> str | None:
+    spell_block_covers_card = allow_bkb_spell_block and counters.keys() <= {
+        "disable", "targeted_disable", "targeted_piercing_disable",
+    }
+
     def valid(a: str) -> bool:
+        if item == "black_king_bar" and a == "sphere" and not spell_block_covers_card:
+            return False
         return a != item and a in C.items() and not _owned_or_upgraded(a, owned) and _fit_weight(a, hero) >= 0.5
 
-    alts = C.alternatives(item)
+    alts = C.alternatives(item, counters)
     if counters:
         same_threat = list(dict.fromkeys(
             ci for tag in counters for ci, _, _ in C.COUNTER_ITEMS.get(tag, []) if ci != item
@@ -123,6 +130,10 @@ def recommend_items(state: GameState, threats: list[Threat], *, popularity: dict
     attr = hero.get("primary_attr") or "all"
     attr_label = C.ATTR_LABELS.get(attr, attr)
     build = C.CORE_BUILD.get(attr, C.CORE_BUILD["all"])
+    threat_tags = {tag for threat in threats for tag in threat.tags}
+    allow_bkb_spell_block = bool(threat_tags & {"targeted_disable", "targeted_piercing_disable"}) and not (
+        threat_tags & {"area_disable", "area_piercing_disable"}
+    )
 
     candidates: dict[str, dict] = {}
 
@@ -147,13 +158,16 @@ def recommend_items(state: GameState, threats: list[Threat], *, popularity: dict
                 "Prepares the next power spike.")
 
     for threat in threats:
+        scored_items = set()
         for tag in threat.tags:
             for item, why, _ in C.COUNTER_ITEMS.get(tag, []):
-                item_cost = C.item_cost(item) or 0
-                phase_scale = 0.35 if (phase_key == "laning" and item_cost >= LANING_EXPENSIVE_THRESHOLD) else 1.0
-                if phase_key == "laning" and item == "gem":
-                    phase_scale = 0.35
-                add(item, 0.35 * threat.severity * phase_scale, "", why)
+                if item not in scored_items:
+                    scored_items.add(item)
+                    item_cost = C.item_cost(item) or 0
+                    phase_scale = 0.25 if (phase_key == "laning" and item_cost >= LANING_EXPENSIVE_THRESHOLD) else 1.0
+                    if phase_key == "laning" and item == "gem":
+                        phase_scale = 0.35
+                    add(item, 0.35 * threat.severity * phase_scale, "", why)
                 if item in candidates:
                     candidates[item]["counters"].setdefault(tag, []).append(threat.hero_name)
 
@@ -169,7 +183,7 @@ def recommend_items(state: GameState, threats: list[Threat], *, popularity: dict
             if share >= 0.01:
                 reasons.append(f"{share:.0%} of recent {phase_key}-phase purchases on this hero (OpenDota)")
         cost = C.item_cost(item)
-        alt = _pick_alternative(item, c["counters"], owned, hero)
+        alt = _pick_alternative(item, c["counters"], owned, hero, allow_bkb_spell_block=allow_bkb_spell_block)
         needed, owned_comps = _gold_needed_with_components(item, state.items)
         counter_hits = sum(len(h) for h in c["counters"].values())
         if phase_key == "laning":

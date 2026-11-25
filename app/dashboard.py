@@ -17,7 +17,7 @@ from app.database import models as db  # noqa: E402
 from app.database.connection import connect  # noqa: E402
 from app.engine.coach import coach_match, parse_account_id  # noqa: E402
 from app.gsi.provider import MockProvider  # noqa: E402
-from app.models import DataSource, GameState, ItemRecommendation, Priority, Threat  # noqa: E402
+from app.models import CounterItem, DataSource, GameState, ItemRecommendation, Priority, Threat  # noqa: E402
 from app.services import analyze  # noqa: E402
 
 st.set_page_config(page_title="DotaSense AI", page_icon="🛡️", layout="wide", initial_sidebar_state="collapsed")
@@ -75,6 +75,13 @@ def fmt_time(seconds: int | None) -> str:
     sign = "-" if seconds < 0 else ""
     seconds = abs(seconds)
     return f"{sign}{seconds // 60}:{seconds % 60:02d}"
+
+
+def render_counter(ci: CounterItem) -> None:
+    kind = "Defensive" if ci.defensive else "Offensive"
+    st.markdown(f"<div class='ds-card'><b>{escape(ci.item_name)}</b> <small>{kind}</small><br>"
+                f"{escape(ci.explanation)}<br><small>Against: {escape(', '.join(ci.against_heroes))} · "
+                f"Counters: {escape(', '.join(ci.counters))}</small></div>", unsafe_allow_html=True)
 
 
 def item_priority(rec: ItemRecommendation) -> tuple[str, str, str]:
@@ -223,6 +230,8 @@ with tab_live:
                 unsafe_allow_html=True)
 
     with st.expander("Enemy threat and counter details"):
+        st.caption(("Mock lineup · " if state.is_mock else "") +
+                   "Heuristic scouting, not a live threat score. Role-only hints do not establish specific counters.")
         if not result["threats"]:
             st.markdown(MISSING + " — add the visible enemy lineup in the sidebar", unsafe_allow_html=True)
         else:
@@ -231,17 +240,20 @@ with tab_live:
                 st.markdown("**Biggest threats**")
                 for t in result["threats"]:
                     abil = ", ".join(result["enemy_abilities"].get(t.hero_name, [])[:4])
-                    src = "curated tags" if t.tags_source == "curated" else "inferred from OpenDota roles"
+                    src = "Curated heuristic" if t.tags_source == "curated" else "Uncertain · OpenDota roles only"
                     st.markdown(f"<div class='ds-card'><b>{escape(t.hero_name)}</b> "
-                                f"<small>severity {t.severity}</small><br>{escape(t.explanation)}<br>"
+                                f"<small>rule score {t.severity}</small><br>{escape(t.explanation)}<br>"
                                 f"<small>Abilities: {escape(abil or 'n/a')} · {src}</small></div>", unsafe_allow_html=True)
             with ccol:
                 st.markdown("**Counter items**")
-                for ci in result["counters"][:8]:
-                    kind = "Defensive" if ci.defensive else "Offensive"
-                    st.markdown(f"<div class='ds-card'><b>{escape(ci.item_name)}</b> <small>{kind}</small><br>"
-                                f"{escape(ci.explanation)}<br><small>Against: {escape(', '.join(ci.against_heroes))} · "
-                                f"Counters: {escape(', '.join(ci.counters))}</small></div>", unsafe_allow_html=True)
+                counters = result["counters"]
+                if not counters:
+                    st.caption("No new counter items supported by these tags and your inventory.")
+                for ci in counters[:8]:
+                    render_counter(ci)
+                if len(counters) > 8 and st.checkbox(f"Show more counter options ({len(counters) - 8})"):
+                    for ci in counters[8:]:
+                        render_counter(ci)
 
     with st.expander("Hero, inventory and match stats"):
         st.markdown(
@@ -269,6 +281,8 @@ with tab_live:
             st.markdown(MISSING, unsafe_allow_html=True)
 
     st.subheader("Strategic suggestions")
+    st.caption(("Mock match · " if state.is_mock else "") +
+               "Conditional calls: check the map, cooldowns and team readiness before acting.")
     for s in result["suggestions"]:
         cls = "ds-b-high" if s.confidence == "high" else "ds-b-sit" if s.confidence == "medium" else "ds-b-unc"
         label = "UNCERTAIN" if "uncertain" in s.confidence else f"{s.confidence.upper()} CONFIDENCE"

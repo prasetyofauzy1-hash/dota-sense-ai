@@ -2,72 +2,76 @@
 Suggestions are skipped when inputs are missing; uncertain ones are labeled."""
 from __future__ import annotations
 
-from app.data import constants as C
-from app.models import GamePhase, GameState, ItemRecommendation, Suggestion, Threat
+from app.models import GamePhase, GameState, ItemRecommendation, Priority, Suggestion, Threat
 
-MAJOR_ITEM_COST = 2000
 UNCERTAIN = "low (uncertain)"
 
 
 def suggest(state: GameState, threats: list[Threat], recs: list[ItemRecommendation]) -> list[Suggestion]:
-    if state.game_time is None or state.hero.level is None:
+    if state.game_time is None or state.game_time < 0 or state.hero.level is None or state.hero.level < 1:
         return [Suggestion(category="info", confidence=UNCERTAIN,
                            text="Not enough match data for strategic suggestions.",
-                           reasons=["game time or hero level unavailable"])]
+                           reasons=["in-game time or hero level unavailable"])]
+    if state.hero.alive is False:
+        return [Suggestion(category="info", confidence="high",
+                           text="You are dead. Reassess the map and objectives when you respawn.",
+                           reasons=["hero is dead"])]
     out: list[Suggestion] = []
     minutes = state.game_time / 60
-    major_items = [i for i in state.items if (C.item_cost(i) or 0) >= MAJOR_ITEM_COST]
-    expected = max(0, int((minutes - 8) // 8))
+    low_hp = state.hero.health_percent is not None and state.hero.health_percent < 35
 
     # Farm vs fight
-    if len(major_items) < expected:
-        out.append(Suggestion(category="farm_vs_fight", confidence="medium",
-                              text="Prioritise farming safe lanes/jungle before taking fights.",
-                              reasons=[f"{len(major_items)} major item(s) at {minutes:.0f} min, ~{expected} expected"]))
-    else:
-        out.append(Suggestion(category="farm_vs_fight", confidence="medium",
-                              text="Your items are on time: join fights and objectives with your team.",
-                              reasons=[f"{len(major_items)} major item(s) at {minutes:.0f} min"]))
+    out.append(Suggestion(category="farm_vs_fight", confidence=UNCERTAIN,
+                          text="Join only if nearby allies can follow up and key spells are ready. Otherwise use safe farm or reset.",
+                          reasons=["team readiness, enemy positions and safe farm are not known"]))
 
     # Power spike
-    affordable = [r for r in recs if r.affordable and r.priority.value == "high"]
-    if affordable:
-        r = affordable[0]
-        low_hp = state.hero.health_percent is not None and state.hero.health_percent < 35
-        follow = "Heal up first, then look for a fight." if low_hp else "Consider fighting right after."
-        out.append(Suggestion(category="power_spike", confidence="high",
-                              text=f"You can buy {r.item_name} now — a power spike. {follow}",
-                              reasons=[f"gold {state.gold} covers what is left to buy ({r.cost} total)"]))
+    affordable = next((r for r in recs if r.priority == Priority.HIGH and r.affordable), None)
+    if affordable and state.gold is not None and affordable.remaining_gold is not None:
+        follow = "Recover HP first." if low_hp else "Check the fight and your team's readiness before committing."
+        needed = state.gold - affordable.remaining_gold
+        out.append(Suggestion(category="power_spike", confidence=UNCERTAIN,
+                              text=f"You have enough gold for {affordable.item_name}. It may help once delivered. {follow}",
+                              reasons=[f"{state.gold} gold covers the {needed} still needed; delivery and fight readiness are unknown"]))
     elif recs and recs[0].remaining_gold is not None:
         gap = -recs[0].remaining_gold
         if 0 < gap <= 800:
-            out.append(Suggestion(category="power_spike", confidence="medium",
-                                  text=f"{gap} gold away from {recs[0].item_name}: farm a little before committing.",
-                                  reasons=["next high-value item is close"]))
+            out.append(Suggestion(category="power_spike", confidence=UNCERTAIN,
+                                  text=f"{gap} gold away from {recs[0].item_name}. Finish it first if you can farm safely without giving up an objective.",
+                                  reasons=["gold gap is known; farm safety and objective urgency are not"]))
 
     # Aggressive vs defensive
-    if state.hero.health_percent is not None and state.hero.health_percent < 35:
+    if low_hp:
         out.append(Suggestion(category="stance", confidence="high", text="Low HP: play defensively and regenerate.",
                               reasons=[f"HP {state.hero.health_percent}%"]))
-    elif state.deaths is not None and state.kills is not None:
-        if state.deaths > state.kills + (state.assists or 0) / 2 + 2:
-            out.append(Suggestion(category="stance", confidence="medium",
-                                  text="You are dying often: play closer to your team and buy defensive items.",
-                                  reasons=[f"K/D/A {state.kills}/{state.deaths}/{state.assists}"]))
+    elif state.deaths is not None and state.kills is not None and state.assists is not None:
+        if state.deaths > state.kills + state.assists / 2 + 2:
+            out.append(Suggestion(category="stance", confidence=UNCERTAIN,
+                                  text="If you are being picked off, play within reach of teammates or vision.",
+                                  reasons=[f"K/D/A {state.kills}/{state.deaths}/{state.assists}; causes of deaths are unknown"]))
         elif state.kills >= state.deaths + 3:
-            out.append(Suggestion(category="stance", confidence="medium",
-                                  text="You are ahead: play aggressively and take map control.",
-                                  reasons=[f"K/D/A {state.kills}/{state.deaths}/{state.assists}"]))
+            out.append(Suggestion(category="stance", confidence=UNCERTAIN,
+                                  text="Take more space only if your team can back you up and enemy threats are accounted for.",
+                                  reasons=[f"K/D/A {state.kills}/{state.deaths}/{state.assists} does not establish a team lead"]))
 
     # Push / defend
-    pushers = [t.hero_name for t in threats if "push" in t.tags]
+    piercing_tags = {"targeted_piercing_disable", "area_piercing_disable"}
+    piercing = [t.hero_name for t in threats if piercing_tags.intersection(t.tags)]
+    if piercing:
+        positioning = ("Watch your positioning against control that does not need a unit target. "
+                       if any("area_piercing_disable" in t.tags for t in threats) else "")
+        out.append(Suggestion(category="team_fight", confidence=UNCERTAIN,
+                              text=f"Don't count on BKB for piercing lockdown. {positioning}Check whether the key spell was used before committing.",
+                              reasons=[f"lineup threats: {', '.join(piercing)}; enemy cooldowns are unknown"]))
+
+    pushers = [t.hero_name for t in threats if "push" in t.tags or "role_push" in t.tags]
     if pushers:
-        out.append(Suggestion(category="push_defend", confidence="medium",
-                              text="Enemy has strong pushers: keep waves pushed out and defend towers early.",
-                              reasons=[f"pushers: {', '.join(pushers)}"]))
+        out.append(Suggestion(category="push_defend", confidence=UNCERTAIN,
+                              text="Watch waves against this lineup. Clear a threatened wave if safe; don't defend an exposed tower alone.",
+                              reasons=[f"potential pushers: {', '.join(pushers)}; wave and tower status are unknown"]))
     elif state.phase in (GamePhase.MID, GamePhase.LATE) and affordable:
         out.append(Suggestion(category="push_defend", confidence=UNCERTAIN,
-                              text="After your power spike, pushing a tower with your team may be good.",
+                              text="After your item arrives, consider a tower only if allies and a wave are in position.",
                               reasons=["tower and enemy positions are not available to DotaSense"]))
 
     # Roshan
