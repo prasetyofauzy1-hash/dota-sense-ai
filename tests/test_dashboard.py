@@ -62,3 +62,44 @@ def test_match_glance_distinguishes_mock_live_status_and_missing_lineup(monkeypa
     status = next(block.value for block in dashboard.tabs[0].markdown if "ds-status'" in block.value)
     assert "MOCK DATA" in status and "Not a real match" in status
     assert "Live GSI: On · mock view" in status
+
+
+def test_pro_counter_intel_defaults_to_matchup_but_allows_custom_item(monkeypatch):
+    connect = connection.connect
+    monkeypatch.setattr(connection, "connect", lambda: connect(":memory:"))
+    monkeypatch.setattr(config, "settings", replace(config.settings, live_integration_enabled=False))
+    script = Path(__file__).resolve().parents[1] / "app" / "dashboard.py"
+    dashboard = AppTest.from_file(script).run()
+    pro = dashboard.tabs[2]
+    assert pro.label == "Pro Counter Intel"
+    assert pro.selectbox[0].value == "juggernaut"
+    assert pro.selectbox[1].value == "necrolyte"
+    assert any("selected pro tournaments" in block.value for block in pro.caption)
+
+    dashboard.multiselect[0].set_value(["lion"]).run()
+    pro = dashboard.tabs[2]
+    assert pro.selectbox[1].value == "lion"
+    assert any("No matches for this selection" in block.value for block in pro.info)
+
+    pro.selectbox[0].set_value("skeleton_king").run()
+    pro = dashboard.tabs[2]
+    assert pro.selectbox[1].value is None
+    pro.selectbox[2].set_value("radiance").run()
+    assert not dashboard.exception
+    pro = dashboard.tabs[2]
+    assert pro.dataframe[0].value.to_dict(orient="records") == [{
+        "Item": "Radiance", "With item": "25.0% (1/4 wins)", "Without item": "0.0% (0/1 wins)",
+        "Difference": "Small sample",
+    }]
+    assert any("8743555498" in block.value for block in pro.caption)
+    assert any("not a rules-based counter" in block.value for block in pro.caption)
+
+    pro.selectbox[0].set_value("windrunner").run()
+    dashboard.tabs[2].selectbox[1].set_value("puck").run()
+    assert not dashboard.exception
+    pro = dashboard.tabs[2]
+    assert any("Windranger against Puck" in block.value for block in pro.markdown)
+    bkb = pro.dataframe[0].value.set_index("Item").loc["Black King Bar"]
+    assert bkb["With item"] == "63.6% (21/33 wins)"
+    assert bkb["Without item"] == "56.2% (9/16 wins)"
+    assert bkb["Difference"] == "+7.4 pp"

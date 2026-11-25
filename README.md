@@ -75,7 +75,7 @@ Optional environment variables:
 | Variable | Default | Effect |
 |---|---|---|
 | `OPENDOTA_API_KEY` | none | Higher OpenDota rate limits (free tier ≈ 60 req/min, 2000/day) |
-| `DOTASENSE_OFFLINE` | `false` | Never call OpenDota; rules only |
+| `DOTASENSE_OFFLINE` | `false` | Never call OpenDota; live recommendations use rules only. Bundled pro data still works. |
 | `DOTASENSE_DB_PATH` | `./dotasense.db` | SQLite file |
 | `OPENAI_API_KEY` | none | Optional LLM rewording of explanations (`app/ai/explanation.py`) |
 | `DOTASENSE_LIVE_GSI` | `true` | Accept GSI pushes from Dota 2 |
@@ -98,7 +98,7 @@ app/
   desktop.py            Windows launcher: GSI/API server + dashboard + app window
   data/opendota.py      OpenDota client with SQLite cache
   data/constants.py     Hero/item constants + curated rule tables
-  data/snapshot/        Trimmed OpenDota constants (heroes, items, abilities) for offline use
+  data/snapshot/        OpenDota constants and a pro tournament sample for offline use
   engine/item_recommender.py   rules + historical item stats (secondary signal only)
   engine/counter_analyzer.py   threat tags per enemy, counter items, matchup win rates
   engine/decision_engine.py    farm/fight, power spike, stance, push/defend, Roshan
@@ -119,6 +119,25 @@ tests/
 5. Owned items (and their upgrades) are skipped; each result shows reason, benefit, alternative and gold left.
 
 Curated tables are design heuristics, not statistics, and are labeled as such.
+
+### Pro Counter Intel
+
+Choose a hero and an opponent to see the hero's record in real pro tournament games against that
+enemy and compare items the counter rules suggest. The tab starts from the current hero and enemy
+lineup when available. You can also inspect a custom item, such as Wraith King with Radiance;
+**All opponents** is an overall hero–item comparison, not evidence for a specific counter.
+
+The bundled [OpenDota Explorer](https://docs.opendota.com/#tag/explorer) sample covers selected
+pro tournament main events, not public games or qualifiers. It compares win rates with and without
+an item in final inventory (six main slots and three backpack slots). It excludes incomplete rosters
+and inventories and matches shorter than 10 minutes. Differences are in percentage points and only
+shown when each group has at least 10 matches. Final inventory is not purchase history. Role, patch,
+game state and team composition can affect outcomes; the results do not change live counter rules.
+The tab links to the source events and example matches.
+
+To reproduce the bundled data, run
+`python scripts/refresh_pro_matches.py --start 2025-11-24 --before 2026-11-25`.
+The refresh script lists the selected event IDs and the source query; update them for newer events.
 
 ## Roadmap
 
