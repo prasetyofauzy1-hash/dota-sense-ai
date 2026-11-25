@@ -6,7 +6,7 @@ from collections import Counter
 import streamlit as st
 
 from app.data import constants as C
-from app.data.pro_matches import MIN_ITEM_GROUP, Record, compare_item, load_pro_matches, win_record
+from app.data.pro_matches import MIN_ITEM_GROUP, Record, item_cohorts, load_pro_matches, win_record
 from app.engine.counter_analyzer import analyze_threats, counter_items
 from app.models import GameState
 
@@ -78,13 +78,14 @@ def render_pro_counter_panel(state: GameState, hero_options: list[str]) -> None:
                 st.caption(f"Why counter rules suggest {labels[selected]}: {rules[selected].explanation}")
             else:
                 st.caption("Custom item comparison · not a rules-based counter recommendation.")
+            cohorts = {item: item_cohorts(games, item_catalog[item]["id"])
+                       for item in dict.fromkeys((selected, *rules))}
             rows = []
-            for item in dict.fromkeys((selected, *rules)):
-                data = item_catalog[item]
-                comparison = compare_item(games, data["id"])
+            for item, groups in cohorts.items():
+                comparison = groups.compare()
                 gap = comparison.gap_pp
                 difference = f"{gap:+.1f} pp" if gap is not None else "Small sample"
-                if (data.get("qual") or "").startswith("consumable"):
+                if (item_catalog[item].get("qual") or "").startswith("consumable"):
                     difference = "Not shown (consumable)"
                 rows.append({
                     "Item": labels[item],
@@ -101,14 +102,18 @@ def render_pro_counter_panel(state: GameState, hero_options: list[str]) -> None:
                 "Patch, role, lineup and being ahead can affect who finishes an item. "
                 "These are observed results, not expected gains; they don’t change the counter rules."
             )
+            if any(groups.excluded for groups in cohorts.values()):
+                st.caption("Individual ward rows omit matches where a combined ward stack hides which type remained.")
 
-            item_id = item_catalog[selected]["id"]
             with st.expander(f"Example matches for {labels[selected]}"):
                 with_col, without_col = st.columns(2)
-                for column, present in ((with_col, True), (without_col, False)):
-                    column.markdown("**With item**" if present else "**Without item**")
-                    examples = [game for game in reversed(games) if (item_id in game.item_ids) == present][:3]
-                    for game in examples:
+                groups = cohorts[selected]
+                if groups.excluded:
+                    st.caption(f"{groups.excluded} matches omitted because the remaining ward type is unknown.")
+                for column, title, examples in ((with_col, "With item", groups.with_item),
+                                                (without_col, "Without item", groups.without_item)):
+                    column.markdown(f"**{title}**")
+                    for game in reversed(examples[-3:]):
                         outcome = "Win" if game.won else "Loss"
                         column.caption(f"[{game.match_id}](https://www.opendota.com/matches/{game.match_id}) · "
                                        f"{sample.league_names[game.league_id]} · {outcome}")

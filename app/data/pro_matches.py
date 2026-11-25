@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from functools import lru_cache
 
+from app.data import constants as C
 from app.data.opendota import SNAPSHOT_DIR
 
 MIN_ITEM_GROUP = 10
@@ -51,6 +52,16 @@ class ItemComparison:
 
 
 @dataclass(frozen=True)
+class ItemCohorts:
+    with_item: tuple[Appearance, ...]
+    without_item: tuple[Appearance, ...]
+    excluded: int
+
+    def compare(self) -> ItemComparison:
+        return ItemComparison(win_record(self.with_item), win_record(self.without_item))
+
+
+@dataclass(frozen=True)
 class ProMatches:
     league_names: dict[int, str]
     league_counts: dict[int, int]
@@ -71,10 +82,21 @@ def win_record(games: tuple[Appearance, ...]) -> Record:
     return Record(sum(game.won for game in games), len(games))
 
 
-def compare_item(games: tuple[Appearance, ...], item_id: int) -> ItemComparison:
-    with_item = win_record(tuple(game for game in games if item_id in game.item_ids))
-    total = win_record(games)
-    return ItemComparison(with_item, Record(total.wins - with_item.wins, total.games - with_item.games))
+def item_cohorts(games: tuple[Appearance, ...], item_id: int) -> ItemCohorts:
+    catalog = C.items()
+    combined_ward = catalog["ward_dispenser"]["id"]
+    ward_types = (catalog["ward_sentry"]["id"], catalog["ward_observer"]["id"])
+    with_item = []
+    without_item = []
+    excluded = 0
+    for game in games:
+        if item_id in game.item_ids:
+            with_item.append(game)
+        elif item_id in ward_types and combined_ward in game.item_ids:
+            excluded += 1
+        else:
+            without_item.append(game)
+    return ItemCohorts(tuple(with_item), tuple(without_item), excluded)
 
 
 @lru_cache(maxsize=1)

@@ -125,3 +125,7 @@ def test_pro_counter_intel_defaults_to_matchup_but_allows_custom_item(monkeypatc
     assert detection.loc["Dust of Appearance", "Difference"] == "Not shown (consumable)"
     assert detection.loc["Sentry Ward", "Difference"] == "Not shown (consumable)"
     assert any("remaining stock only, not usage" in block.value for block in pro.caption)
+    pro.selectbox[2].set_value("ward_sentry").run()
+    pro = dashboard.tabs[2]
+    assert any("6 matches omitted" in block.value for block in pro.caption)
+    assert not any("9090171021" in block.value for block in pro.caption)
