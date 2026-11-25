@@ -1,5 +1,7 @@
 # PyInstaller spec for the Windows app: `pyinstaller packaging/windows/dotasense.spec --noconfirm`
+import glob
 import os
+from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
 
@@ -12,7 +14,13 @@ datas = [
     (os.path.join(ROOT, ".streamlit", "config.toml"), ".streamlit"),
 ]
 datas += collect_data_files("streamlit") + copy_metadata("streamlit")
-hiddenimports = collect_submodules("app") + collect_submodules("uvicorn") + collect_submodules("streamlit")
+# dashboard.py runs as a Streamlit script, so its imports are invisible to the analysis: list every app module.
+app_modules = sorted(
+    ".".join(Path(path).relative_to(ROOT).with_suffix("").parts).removesuffix(".__init__")
+    for path in glob.glob(os.path.join(ROOT, "app", "**", "*.py"), recursive=True)
+    if not path.endswith("dashboard.py")
+)
+hiddenimports = app_modules + collect_submodules("uvicorn") + collect_submodules("streamlit")
 
 a = Analysis(
     [os.path.join(SPECPATH, "dotasense_launcher.py")],

@@ -63,24 +63,11 @@ def main(exe: str, out_dir: str) -> None:
                 browser = pw.chromium.launch(channel="msedge")
             page = browser.new_page(viewport={"width": 1500, "height": 1000})
             page.goto(ui)
-            page.get_by_text("Connect Dota 2").first.wait_for(timeout=120_000)
-            page.get_by_role("button", name="Install config into Dota 2").click()
-            page.get_by_text("Config installed").or_(page.get_by_text("Config written to")).first.wait_for(timeout=30_000)
-            cfg = dota / "game" / "dota" / "cfg" / "gamestate_integration" / "gamestate_integration_dotasense.cfg"
-            assert token in cfg.read_text(encoding="utf-8"), "GSI config not written"
-            page.screenshot(path=str(out / "1-waiting-for-dota.png"), full_page=True)
-
-            payload["auth"] = {"token": token}
-            req = urllib.request.Request(f"{GSI}/gsi", json.dumps(payload).encode(), {"Content-Type": "application/json"})
-            assert json.loads(urllib.request.urlopen(req, timeout=5).read())["ok"] is True
-            page.get_by_text("Receiving").first.wait_for(timeout=30_000)
-            page.get_by_text("Juggernaut").first.wait_for(timeout=30_000)
-            time.sleep(2)
-            page.screenshot(path=str(out / "2-live-gsi.png"), full_page=True)
-            assert "MOCK DATA" not in page.content()
-
-            page.get_by_role("button", name="Quit DotaSense AI").click()
-            assert proc.wait(timeout=30) == 0, proc.returncode
+            try:
+                run_ui(page, proc, dota, token, payload, out)
+            except Exception:
+                page.screenshot(path=str(out / "failure.png"), full_page=True)
+                raise
             browser.close()
         print("Smoke test passed")
     finally:
@@ -89,6 +76,27 @@ def main(exe: str, out_dir: str) -> None:
         log = data / "dotasense.log"
         if log.exists():
             (out / "dotasense.log").write_text(log.read_text(encoding="utf-8", errors="replace"), encoding="utf-8")
+
+
+def run_ui(page, proc, dota: Path, token: str, payload: dict, out: Path) -> None:
+    page.get_by_text("Connect Dota 2").first.wait_for(timeout=120_000)
+    page.get_by_role("button", name="Install config into Dota 2").click()
+    page.get_by_text("Config installed").or_(page.get_by_text("Config written to")).first.wait_for(timeout=30_000)
+    cfg = dota / "game" / "dota" / "cfg" / "gamestate_integration" / "gamestate_integration_dotasense.cfg"
+    assert token in cfg.read_text(encoding="utf-8"), "GSI config not written"
+    page.screenshot(path=str(out / "1-waiting-for-dota.png"), full_page=True)
+
+    payload["auth"] = {"token": token}
+    req = urllib.request.Request(f"{GSI}/gsi", json.dumps(payload).encode(), {"Content-Type": "application/json"})
+    assert json.loads(urllib.request.urlopen(req, timeout=5).read())["ok"] is True
+    page.get_by_text("Receiving").first.wait_for(timeout=30_000)
+    page.get_by_text("Juggernaut").first.wait_for(timeout=30_000)
+    time.sleep(2)
+    page.screenshot(path=str(out / "2-live-gsi.png"), full_page=True)
+    assert "MOCK DATA" not in page.content()
+
+    page.get_by_role("button", name="Quit DotaSense AI").click()
+    assert proc.wait(timeout=30) == 0, proc.returncode
 
 
 if __name__ == "__main__":
