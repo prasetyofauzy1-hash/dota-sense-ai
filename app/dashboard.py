@@ -139,22 +139,32 @@ with tab_live:
 
     # 4. Recommended Items
     st.subheader("4 · Recommended Items")
+    if not state.enemy_heroes:
+        st.caption("Showing core build only — add enemy heroes in the sidebar for counter-item recommendations.")
     if not result["recommendations"]:
         st.markdown(MISSING + " — hero unknown", unsafe_allow_html=True)
     for r in result["recommendations"]:
         high = r.priority.value == "high"
         badge = "<span class='ds-badge ds-b-high'>HIGH PRIORITY</span>" if high else \
             "<span class='ds-badge ds-b-sit'>SITUATIONAL</span>"
+        buy_badge = "<span class='ds-badge ds-b-ok'>BUY NOW</span>" if r.affordable else ""
+        if r.cost is None:
+            cost_txt = MISSING
+        elif r.owned_components and r.upgrade_cost is not None:
+            cost_txt = (f"{r.cost:,} gold · {r.upgrade_cost:,} gold to finish "
+                        f"(have {', '.join(r.owned_components)})")
+        else:
+            cost_txt = f"{r.cost:,} gold"
         if r.affordable:
-            gold_txt = f"Affordable now · {r.remaining_gold} gold left after buying"
+            gold_txt = f"Affordable now · {r.remaining_gold:,} gold left after buying"
         elif r.remaining_gold is not None:
-            gold_txt = f"Need {-r.remaining_gold} more gold"
+            gold_txt = f"Need {-r.remaining_gold:,} more gold"
         else:
             gold_txt = "Gold not available"
         alt = f"<br><b>Alternative:</b> {r.alternative_name}" if r.alternative_name else ""
         st.markdown(
-            f"<div class='ds-card {'ds-high' if high else 'ds-sit'}'>{badge}<b>{r.item_name}</b> "
-            f"<small>({val(r.cost)} gold)</small><br><b>Why:</b> {r.reason}<br>"
+            f"<div class='ds-card {'ds-high' if high else 'ds-sit'}'>{badge}{buy_badge}<b>{r.item_name}</b> "
+            f"<small>({cost_txt})</small><br><b>Why:</b> {r.reason}<br>"
             f"<b>Benefit:</b> {r.benefit}{alt}<br><small>{gold_txt} · score {r.score}</small></div>",
             unsafe_allow_html=True)
     st.caption("History-backed" if result["used_history"] else "Rules only (no historical data used)")
