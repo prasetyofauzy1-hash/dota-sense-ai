@@ -115,3 +115,13 @@ def test_pro_counter_intel_defaults_to_matchup_but_allows_custom_item(monkeypatc
     diffusal = pro.dataframe[0].value.set_index("Item")["With item"]
     assert diffusal["Diffusal Blade (item ID 174)"] == "100.0% (3/3 wins)"
     assert diffusal["Diffusal Blade (item ID 196)"] == "No games"
+
+    pro.selectbox[0].set_value("hoodwink").run()
+    dashboard.tabs[2].selectbox[1].set_value("nyx_assassin").run()
+    pro = dashboard.tabs[2]
+    assert pro.selectbox[2].value == "dust"
+    detection = pro.dataframe[0].value.set_index("Item")
+    assert "/19 wins)" in detection.loc["Dust of Appearance", "With item"]
+    assert detection.loc["Dust of Appearance", "Difference"] == "Not shown (consumable)"
+    assert detection.loc["Sentry Ward", "Difference"] == "Not shown (consumable)"
+    assert any("remaining stock only, not usage" in block.value for block in pro.caption)

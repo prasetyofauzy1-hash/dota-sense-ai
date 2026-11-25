@@ -131,7 +131,8 @@ The bundled [OpenDota Explorer](https://docs.opendota.com/#tag/explorer) sample 
 pro tournament main events, not public games or qualifiers. It compares win rates with and without
 an item in final inventory (six main slots and three backpack slots). It excludes incomplete rosters
 and inventories and matches shorter than 10 minutes. Differences are in percentage points and only
-shown when each group has at least 10 matches. Final inventory is not purchase history. Role, patch,
+shown when each group has at least 10 matches. Consumables show remaining stock, not usage, and
+never show a difference. Final inventory is not purchase history. Role, patch,
 game state and team composition can affect outcomes; the results do not change live counter rules.
 The tab links to the source events and example matches.
 

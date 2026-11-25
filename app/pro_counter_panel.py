@@ -57,10 +57,7 @@ def render_pro_counter_panel(state: GameState, hero_options: list[str]) -> None:
             key=f"pro-enemy-{hero}-{','.join(visible)}",
         )
         item_catalog = C.items()
-        shop_items = {
-            name for name, data in item_catalog.items()
-            if (data.get("cost") or 0) > 0 and not (data.get("qual") or "").startswith("consumable")
-        }
+        shop_items = {name for name, data in item_catalog.items() if (data.get("cost") or 0) > 0}
         rules = {entry.item: entry for entry in counter_items(analyze_threats([enemy]), my_hero=hero)
                  if entry.item in shop_items} if enemy else {}
         labels = _item_labels(shop_items)
@@ -83,19 +80,24 @@ def render_pro_counter_panel(state: GameState, hero_options: list[str]) -> None:
                 st.caption("Custom item comparison · not a rules-based counter recommendation.")
             rows = []
             for item in dict.fromkeys((selected, *rules)):
-                comparison = compare_item(games, item_catalog[item]["id"])
+                data = item_catalog[item]
+                comparison = compare_item(games, data["id"])
                 gap = comparison.gap_pp
+                difference = f"{gap:+.1f} pp" if gap is not None else "Small sample"
+                if (data.get("qual") or "").startswith("consumable"):
+                    difference = "Not shown (consumable)"
                 rows.append({
                     "Item": labels[item],
                     "With item": _record_text(comparison.with_item),
                     "Without item": _record_text(comparison.without_item),
-                    "Difference": f"{gap:+.1f} pp" if gap is not None else "Small sample",
+                    "Difference": difference,
                 })
             st.dataframe(rows, hide_index=True, width="stretch")
             st.caption(
                 "Difference = win rate with item minus without it, in percentage points (pp). "
                 f"Hidden unless both groups have at least {MIN_ITEM_GROUP} matches. "
                 "Final inventory only (including backpack): this does not show purchases or timing. "
+                "Consumables show remaining stock only, not usage; their difference is always hidden. "
                 "Patch, role, lineup and being ahead can affect who finishes an item. "
                 "These are observed results, not expected gains; they don’t change the counter rules."
             )
