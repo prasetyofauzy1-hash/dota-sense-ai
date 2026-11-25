@@ -236,7 +236,8 @@ def render_gsi_setup(connected: bool) -> None:
         st.download_button("Download config file", dota_cfg.cfg_text(), file_name=dota_cfg.CFG_NAME)
         st.markdown(f"2. In Steam: right-click **Dota 2 → Properties → Launch options**, add "
                     f"`{dota_cfg.LAUNCH_OPTION}`.\n"
-                    "3. Restart Dota 2 and start a match (or Demo Hero). This panel turns green when data arrives.")
+                    "3. Restart Dota 2 and start a match (or Demo Hero). Open the sidebar and look for the "
+                    "green **Live GSI** badge with **Receiving** next to it.")
         st.caption(f"DotaSense listens on {settings.gsi_url} (this PC only). It reads only what Dota 2 "
                    "sends about your own hero; pick enemy heroes in the box below.")
 
