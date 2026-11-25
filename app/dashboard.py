@@ -21,7 +21,7 @@ from app.services import analyze  # noqa: E402
 st.set_page_config(page_title="DotaSense AI", page_icon="🛡️", layout="wide")
 st.markdown("""
 <style>
-.block-container {padding-top: 1.2rem;}
+.block-container {padding-top: 3.5rem;}
 .ds-card {background:#1a1f2b;border:1px solid #2a3142;border-radius:10px;padding:12px 14px;margin-bottom:10px;}
 .ds-high {border-left:5px solid #e8473c;}
 .ds-sit {border-left:5px solid #f2b134;}
@@ -210,7 +210,7 @@ with tab_post:
             try:
                 report = coach_match(client, int(match_id), account_id=int(account_id) if account_id.strip() else None,
                                      hero_id=hero_id)
-                db.save_report(conn, report["match_id"], report)
+                db.save_report(conn, report)
                 st.success(f"Report saved for match {report['match_id']}")
             except (OpenDotaError, ValueError) as exc:
                 st.error(str(exc))

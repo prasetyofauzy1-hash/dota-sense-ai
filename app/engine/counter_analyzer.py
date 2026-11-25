@@ -55,13 +55,17 @@ def analyze_threats(enemy_heroes: list[str], *, my_hero_id: int | None = None,
     return sorted(threats, key=lambda t: t.severity, reverse=True)
 
 
-def counter_items(threats: list[Threat], owned: list[str] | None = None) -> list[CounterItem]:
+def counter_items(threats: list[Threat], owned: list[str] | None = None,
+                  my_hero: str | None = None) -> list[CounterItem]:
+    from app.engine.item_recommender import _fit_weight
+
     owned_set = set(owned or [])
+    hero = C.heroes_by_name().get(C.hero_short(my_hero) or "") if my_hero else None
     merged: dict[str, CounterItem] = {}
     for threat in threats:
         for tag in threat.tags:
             for item, why, defensive in C.COUNTER_ITEMS.get(tag, []):
-                if item in owned_set:
+                if item in owned_set or (hero and _fit_weight(item, hero) == 0.0):
                     continue
                 entry = merged.get(item)
                 if entry is None:

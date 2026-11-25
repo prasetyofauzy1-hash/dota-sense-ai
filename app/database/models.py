@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 import time
 from typing import Any
 
@@ -36,6 +37,9 @@ CREATE TABLE IF NOT EXISTS match_reports (
 );
 """
 
+# One shared connection may be used from several threads (FastAPI, Streamlit sessions).
+LOCK = threading.RLock()
+
 
 def cache_get(conn: sqlite3.Connection, key: str, max_age: float) -> Any | None:
     row = conn.execute("SELECT payload, fetched_at FROM api_cache WHERE key = ?", (key,)).fetchone()
@@ -45,38 +49,40 @@ def cache_get(conn: sqlite3.Connection, key: str, max_age: float) -> Any | None:
 
 
 def cache_put(conn: sqlite3.Connection, key: str, payload: Any) -> None:
-    conn.execute(
-        "INSERT OR REPLACE INTO api_cache (key, payload, fetched_at) VALUES (?, ?, ?)",
-        (key, json.dumps(payload), time.time()),
-    )
-    conn.commit()
+    with LOCK:
+        conn.execute(
+            "INSERT OR REPLACE INTO api_cache (key, payload, fetched_at) VALUES (?, ?, ?)",
+            (key, json.dumps(payload), time.time()),
+        )
+        conn.commit()
 
 
-def save_snapshot(conn: sqlite3.Connection, state_json: str, *, source: str, is_mock: bool,
-                  match_id: str | None, game_time: int | None) -> int:
-    cur = conn.execute(
-        "INSERT INTO game_snapshots (created_at, source, is_mock, match_id, game_time, payload)"
-        " VALUES (?, ?, ?, ?, ?, ?)",
-        (time.time(), source, int(is_mock), match_id, game_time, state_json),
-    )
-    conn.commit()
-    return int(cur.lastrowid)
+def save_analysis(conn: sqlite3.Connection, state_json: str, recs: list[tuple[str, str, float]], *,
+                  source: str, is_mock: bool, match_id: str | None, game_time: int | None) -> int:
+    """Store a snapshot and its recommendations in one transaction."""
+    now = time.time()
+    with LOCK, conn:
+        cur = conn.execute(
+            "INSERT INTO game_snapshots (created_at, source, is_mock, match_id, game_time, payload)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (now, source, int(is_mock), match_id, game_time, state_json),
+        )
+        snapshot_id = int(cur.lastrowid)
+        conn.executemany(
+            "INSERT INTO recommendation_log (created_at, snapshot_id, item, priority, score) VALUES (?, ?, ?, ?, ?)",
+            [(now, snapshot_id, item, prio, score) for item, prio, score in recs],
+        )
+    return snapshot_id
 
 
-def log_recommendations(conn: sqlite3.Connection, snapshot_id: int, recs: list[tuple[str, str, float]]) -> None:
-    conn.executemany(
-        "INSERT INTO recommendation_log (created_at, snapshot_id, item, priority, score) VALUES (?, ?, ?, ?, ?)",
-        [(time.time(), snapshot_id, item, prio, score) for item, prio, score in recs],
-    )
-    conn.commit()
-
-
-def save_report(conn: sqlite3.Connection, match_id: str, report: dict) -> None:
-    conn.execute(
-        "INSERT OR REPLACE INTO match_reports (match_id, created_at, payload) VALUES (?, ?, ?)",
-        (match_id, time.time(), json.dumps(report)),
-    )
-    conn.commit()
+def save_report(conn: sqlite3.Connection, report: dict) -> None:
+    # One report per player per match (a hero appears once per match).
+    key = f"{report['match_id']}:{report['hero']}"
+    with LOCK, conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO match_reports (match_id, created_at, payload) VALUES (?, ?, ?)",
+            (key, time.time(), json.dumps(report)),
+        )
 
 
 def list_reports(conn: sqlite3.Connection) -> list[dict]:
