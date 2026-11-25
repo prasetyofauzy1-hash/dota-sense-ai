@@ -34,13 +34,57 @@ Type: filesandordirs; Name: "{app}\_internal"
 [Files]
 Source: "..\..\dist\DotaSenseAI\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+[INI]
+Filename: "{app}\release.ini"; Section: "DotaSense"; Key: "Version"; String: "{#AppVersion}"
+
 [Icons]
 Name: "{group}\DotaSense AI"; Filename: "{app}\DotaSenseAI.exe"
 Name: "{group}\Uninstall DotaSense AI"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\DotaSense AI"; Filename: "{app}\DotaSenseAI.exe"; Tasks: desktopicon
 
 [Run]
+Filename: "{app}\DotaSenseAI.exe"; WorkingDir: "{app}"; Flags: nowait; Check: IsAppUpdate
 Filename: "{app}\DotaSenseAI.exe"; Description: "{cm:LaunchProgram,DotaSense AI}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
 Filename: "{sys}\taskkill.exe"; Parameters: "/F /T /IM DotaSenseAI.exe"; Flags: runhidden; RunOnceId: "StopDotaSense"
+
+[UninstallDelete]
+Type: files; Name: "{app}\release.ini"
+
+[Code]
+function OpenProcess(Access: Cardinal; InheritHandle: Boolean; ProcessId: Cardinal): THandle;
+  external 'OpenProcess@kernel32.dll stdcall';
+function WaitForSingleObject(Handle: THandle; Milliseconds: Cardinal): Cardinal;
+  external 'WaitForSingleObject@kernel32.dll stdcall';
+function CloseHandle(Handle: THandle): Boolean;
+  external 'CloseHandle@kernel32.dll stdcall';
+
+function UpdatePid: Integer;
+begin
+  Result := StrToIntDef(ExpandConstant('{param:DOTASENSEUPDATEPID|0}'), 0);
+end;
+
+function IsAppUpdate: Boolean;
+begin
+  Result := UpdatePid > 0;
+end;
+
+function InitializeSetup: Boolean;
+var
+  ProcessHandle: THandle;
+begin
+  Result := True;
+  if not IsAppUpdate then
+    Exit;
+  ProcessHandle := OpenProcess($00100000, False, UpdatePid);
+  if ProcessHandle = 0 then
+    Exit; { The launcher may already have exited. }
+  try
+    Result := WaitForSingleObject(ProcessHandle, 30000) = 0;
+  finally
+    CloseHandle(ProcessHandle);
+  end;
+  if not Result then
+    MsgBox('DotaSense AI is still running. Quit it and try again.', mbError, MB_OK);
+end;

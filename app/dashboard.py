@@ -242,6 +242,42 @@ def render_gsi_setup(connected: bool) -> None:
                    "sends about your own hero; pick enemy heroes in the box below.")
 
 
+if os.getenv("DOTASENSE_DESKTOP") == "1":
+    from app import desktop
+
+    if desktop.updates is not None:
+        @st.fragment(run_every=3 if not settings.offline else None)
+        def render_app_updates() -> None:
+            updater = desktop.updates
+            status = updater.status
+            if status.release:
+                st.info(f"DotaSense AI {status.release.version} is available.")
+                if st.button("Update and restart", type="primary", disabled=status.installing):
+                    with st.spinner("Downloading and verifying the update…"):
+                        if updater.install(status.release):
+                            desktop.request_quit()
+                    status = updater.status
+                if status.installing:
+                    st.caption("An update is already in progress.")
+                if status.error:
+                    st.error(status.error)
+            with st.expander(f"App updates · v{updater.version}"):
+                if settings.offline:
+                    st.caption("Updates are disabled in offline mode.")
+                    return
+                if status.checking:
+                    st.caption("Checking for updates…")
+                elif not status.release:
+                    if status.error:
+                        st.warning(status.error)
+                    elif status.checked:
+                        st.caption("You're up to date.")
+                st.button("Check for updates", disabled=status.checking or status.installing,
+                          on_click=updater.start_check)
+
+        render_app_updates()
+
+
 if live_mode and auto_refresh and hasattr(st, "fragment"):
     seen = live_provider.received_at()
 

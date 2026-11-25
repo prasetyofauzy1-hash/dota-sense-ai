@@ -53,6 +53,16 @@ jobs:
           & $iscc "/DAppVersion=$version" packaging\windows\dotasense.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Write update manifest
+        shell: pwsh
+        run: |
+          $installer = Get-Item dist/installer/DotaSenseAI-Setup.exe
+          @{
+            version = $env:VERSION
+            size = $installer.Length
+            sha256 = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          } | ConvertTo-Json | Set-Content -Encoding utf8NoBOM dist/installer/dotasense-update.json
+
       - name: Install, smoke test and uninstall
         shell: pwsh
         run: |
@@ -60,6 +70,7 @@ jobs:
           if ($p.ExitCode -ne 0) { throw "Installer exit code $($p.ExitCode)" }
           $dir = Join-Path $env:LOCALAPPDATA "Programs\DotaSense AI"
           if (-not (Test-Path "$dir\DotaSenseAI.exe")) { throw "DotaSenseAI.exe not installed in $dir" }
+          $env:SMOKE_UPGRADE_INSTALLER = (Resolve-Path dist\installer\DotaSenseAI-Setup.exe).Path
           python packaging/windows/smoke_test.py "$dir\DotaSenseAI.exe" smoke\installed
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $u = Start-Process "$dir\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait -PassThru
@@ -71,7 +82,7 @@ jobs:
         with:
           name: DotaSenseAI-Windows
           path: |
-            dist/installer/DotaSenseAI-Setup.exe
+            dist/installer/
             smoke/
 
       - name: Publish release
@@ -80,6 +91,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release create "v$env:VERSION" dist/installer/DotaSenseAI-Setup.exe `
+          gh release create "v$env:VERSION" dist/installer/DotaSenseAI-Setup.exe dist/installer/dotasense-update.json `
             --target $env:GITHUB_SHA --latest --title "DotaSense AI $env:VERSION (Windows)" `
             --notes "Download DotaSenseAI-Setup.exe, run it, then open DotaSense AI from the Start menu. See the README section 'Windows app'."
